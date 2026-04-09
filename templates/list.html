@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+{% block title %}My {{ kind|capitalize }} List · AniTracker{% endblock %}
+{% block content %}
+
+<!-- Kind toggle -->
+<div class="kind-toggle big">
+  <a class="{{ 'on' if kind=='anime' else '' }}" href="{{ url_for('my_list', kind='anime') }}">Anime</a>
+  <a class="{{ 'on' if kind=='manga' else '' }}" href="{{ url_for('my_list', kind='manga') }}">Manga</a>
+</div>
+
+<!-- Status tabs -->
+<div class="list-tabs">
+  <a class="list-tab {{ 'active' if not status_filter }}"
+     href="{{ url_for('my_list', kind=kind) }}">
+    All {{ kind|capitalize }}
+    <span class="list-tab-count">{{ total }}</span>
+  </a>
+  {% for s in statuses %}
+  <a class="list-tab {{ 'active' if status_filter == s }}"
+     href="{{ url_for('my_list', kind=kind, status=s) }}"
+     style="--tab-c: {{ status_colors.get(s, '#888') }}">
+    {{ s }}
+    <span class="list-tab-count">{{ status_counts.get(s, 0) }}</span>
+  </a>
+  {% endfor %}
+</div>
+
+<!-- Search -->
+<div class="list-search-wrap">
+  <svg class="list-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  <input type="text" id="listSearch" class="list-search" placeholder="Search your {{ kind }} list…" autocomplete="off">
+</div>
+
+{% set has_notes = items | selectattr('notes', 'defined') | selectattr('notes') | list | length > 0 if items else false %}
+<!-- Table -->
+<div class="list-table {% if has_notes %}has-notes{% endif %}">
+  <div class="list-header">
+    <span class="lh-image">Image</span>
+    <span class="lh-title sortable" data-sort="title" onclick="toggleSort('title')">
+      {{ kind|capitalize }} Title <span class="sort-arrow">⇅</span>
+    </span>
+    <span class="lh-score sortable" data-sort="score" onclick="toggleSort('score')">
+      Score <span class="sort-arrow">⇅</span>
+    </span>
+    <span class="lh-type">Status</span>
+    {% if has_notes %}<span class="lh-notes">Notes</span>{% endif %}
+    <span class="lh-progress">Progress</span>
+    <span class="lh-actions"></span>
+  </div>
+
+  {% if items %}
+    {% for it in items %}
+    {% set link = url_for('anime_detail', mal_id=it.mal_id) if kind=='anime' else url_for('manga_detail', mal_id=it.mal_id) %}
+    {% set total_count = it.total_eps if kind=='anime' else it.total_chs %}
+    {% set display_title = it.title_english or it.title %}
+    {% set jp_title = it.title if it.title_english and it.title != it.title_english else '' %}
+    <div class="list-row" style="--row-c: {{ status_colors.get(it.status, '#888') }}">
+      <a href="{{ link }}" class="lr-image">
+        <img src="{{ it.cover_url }}" alt="" loading="lazy">
+      </a>
+      <div class="lr-title-col">
+        <a href="{{ link }}" class="lr-title">{{ display_title }}</a>
+        {% if jp_title %}<span class="lr-title-jp">{{ jp_title }}</span>{% endif %}
+      </div>
+      <span class="lr-score {% if it.score %}scored{% endif %}">
+        {% if it.score %}<span class="score-star">★</span> {{ it.score }}{% else %}–{% endif %}
+      </span>
+      <span class="lr-status">
+        <span class="status-dot" style="background: {{ status_colors.get(it.status, '#888') }}"></span>
+        {{ it.status }}
+      </span>
+      {% if has_notes %}
+      <span class="lr-notes" title="{{ it.notes or '' }}">{{ it.notes or '' }}</span>
+      {% endif %}
+      <span class="lr-progress">
+        <span class="progress-text">{{ it.progress }} / {{ total_count or '?' }}</span>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: {{ ((it.progress / total_count * 100) if total_count else 0)|round }}%; background: {{ status_colors.get(it.status, '#888') }}"></div>
+        </div>
+      </span>
+      <span class="lr-actions">
+        <button class="lr-edit-btn" title="Edit"
+                data-mal-id="{{ it.mal_id }}"
+                data-title="{{ display_title }}"
+                data-cover="{{ it.cover_url }}"
+                data-status="{{ it.status }}"
+                data-progress="{{ it.progress }}"
+                data-score="{{ it.score or 0 }}"
+                data-total="{{ total_count or 0 }}"
+                data-title-en="{{ it.title_english or '' }}"
+                data-title-jp="{{ it.title_japanese or '' }}"
+                data-title-romaji="{{ it.title }}"
+                data-notes="{{ it.notes or '' }}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="lr-del-btn" title="Remove"
+                onclick="deleteListEntry('{{ kind }}', {{ it.mal_id }}, this)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </span>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="list-empty">
+      <p>No {{ kind }} in this list yet.</p>
+      <a href="{{ url_for('search', kind=kind) }}" class="btn primary">Search {{ kind|capitalize }}</a>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-card edit-modal">
+    <div class="modal-header">
+      <h2>Edit Entry</h2>
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="edit-modal-body">
+      <div class="edit-cover-wrap">
+        <img id="edit-cover" src="" alt="">
+      </div>
+      <div class="edit-fields">
+        <h3 id="edit-title"></h3>
+        <p class="tracker-jp" id="edit-title-jp" style="display:none"></p>
+        <input type="hidden" id="edit-mal-id">
+        <input type="hidden" id="edit-cover-url">
+        <input type="hidden" id="edit-total">
+        <input type="hidden" id="edit-title-english">
+        <input type="hidden" id="edit-title-japanese">
+
+        <div class="form-group">
+          <label for="edit-status">Status</label>
+          <select id="edit-status">
+            {% for s in statuses %}
+            <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="edit-row">
+          <div class="form-group">
+            <label>{{ 'Episodes' if kind == 'anime' else 'Chapters' }}</label>
+            <div class="progress-input-wrap">
+              <button type="button" class="progress-btn" onclick="adjustProgress(-1)">−</button>
+              <input type="number" id="edit-progress" min="0" value="0" oninput="clampProgress()">
+              <span class="progress-total" id="edit-total-display">/ ?</span>
+              <button type="button" class="progress-btn" onclick="adjustProgress(1)">+</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-score">Score</label>
+            <select id="edit-score">
+              <option value="0">— Select —</option>
+              <option value="10">10 — Masterpiece</option>
+              <option value="9">9 — Great</option>
+              <option value="8">8 — Very Good</option>
+              <option value="7">7 — Good</option>
+              <option value="6">6 — Fine</option>
+              <option value="5">5 — Average</option>
+              <option value="4">4 — Bad</option>
+              <option value="3">3 — Very Bad</option>
+              <option value="2">2 — Horrible</option>
+              <option value="1">1 — Appalling</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-notes">Notes</label>
+          <textarea id="edit-notes" rows="3" placeholder="Add your review notes…" style="width:100%;resize:vertical;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px;font:inherit"></textarea>
+        </div>
+
+        <div class="edit-actions">
+          <button class="btn" onclick="closeEditModal()">Cancel</button>
+          <button class="btn primary" onclick="saveEdit()">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const KIND = '{{ kind }}';
+
+function getTotal() {
+  return parseInt(document.getElementById('edit-total').value) || 0;
+}
+
+function clampProgress() {
+  const inp = document.getElementById('edit-progress');
+  let v = parseInt(inp.value) || 0;
+  const total = getTotal();
+  if (v < 0) v = 0;
+  if (total > 0 && v > total) v = total;
+  inp.value = v;
+}
+
+function openEditModal(d) {
+  document.getElementById('edit-mal-id').value = d.mal_id;
+  document.getElementById('edit-title').textContent = d.title;
+  const jpEl = document.getElementById('edit-title-jp');
+  const romaji = d.title_romaji;
+  if (romaji && romaji !== d.title) { jpEl.textContent = romaji; jpEl.style.display = ''; }
+  else if (d.title_jp) { jpEl.textContent = d.title_jp; jpEl.style.display = ''; }
+  else { jpEl.style.display = 'none'; }
+  document.getElementById('edit-cover').src = d.cover;
+  document.getElementById('edit-cover-url').value = d.cover;
+  document.getElementById('edit-status').value = d.status;
+  document.getElementById('edit-total').value = d.total;
+  document.getElementById('edit-title-english').value = d.title_en || '';
+  document.getElementById('edit-title-japanese').value = d.title_jp || '';
+  document.getElementById('edit-notes').value = d.notes || '';
+  document.getElementById('edit-progress').max = d.total || '';
+  document.getElementById('edit-progress').value = Math.min(d.progress, d.total || d.progress);
+  document.getElementById('edit-score').value = d.score || 0;
+  document.getElementById('edit-total-display').textContent = '/ ' + (d.total || '?');
+  document.getElementById('editModal').classList.add('open');
+}
+
+// Delegated click handler for edit buttons
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.lr-edit-btn');
+  if (btn) {
+    e.preventDefault();
+    openEditModal({
+      mal_id:   btn.dataset.malId,
+      title:    btn.dataset.title,
+      cover:    btn.dataset.cover,
+      status:   btn.dataset.status,
+      progress: parseInt(btn.dataset.progress) || 0,
+      score:    parseInt(btn.dataset.score) || 0,
+      total:    parseInt(btn.dataset.total) || 0,
+      title_en: btn.dataset.titleEn || '',
+      title_jp: btn.dataset.titleJp || '',
+      title_romaji: btn.dataset.titleRomaji || '',
+      notes: btn.dataset.notes || '',
+    });
+  }
+});
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('open');
+}
+
+// Close modal when clicking overlay background
+document.getElementById('editModal').addEventListener('click', function(e) {
+  if (e.target === this) closeEditModal();
+});
+
+function adjustProgress(delta) {
+  const inp = document.getElementById('edit-progress');
+  const total = getTotal() || 99999;
+  let v = parseInt(inp.value) || 0;
+  v = Math.max(0, Math.min(total, v + delta));
+  inp.value = v;
+}
+
+async function saveEdit() {
+  clampProgress();
+  const malId = document.getElementById('edit-mal-id').value;
+  const payload = {
+    mal_id: parseInt(malId),
+    title: document.getElementById('edit-title').textContent,
+    title_english: document.getElementById('edit-title-english').value || null,
+    title_japanese: document.getElementById('edit-title-japanese').value || null,
+    cover_url: document.getElementById('edit-cover-url').value,
+    status: document.getElementById('edit-status').value,
+    progress: parseInt(document.getElementById('edit-progress').value) || 0,
+    score: parseInt(document.getElementById('edit-score').value) || null,
+    notes: document.getElementById('edit-notes').value.trim(),
+  };
+  if (KIND === 'anime') payload.total_eps = getTotal();
+  else payload.total_chs = getTotal();
+
+  const res = await fetch('/api/list/' + KIND, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  });
+  if (res.ok) {
+    closeEditModal();
+    location.reload();
+  } else {
+    alert('Failed to save.');
+  }
+}
+
+async function deleteListEntry(kind, malId, btn) {
+  const res = await fetch('/api/list/' + kind + '/' + malId + '/delete', { method: 'POST' });
+  if (res.ok) btn.closest('.list-row').remove();
+}
+
+/* ---------- search ---------- */
+document.getElementById('listSearch').addEventListener('input', function() {
+  const q = this.value.toLowerCase().trim();
+  document.querySelectorAll('.list-row').forEach(row => {
+    const titleCol = row.querySelector('.lr-title-col');
+    const text = titleCol ? titleCol.textContent.toLowerCase() : '';
+    row.style.display = text.includes(q) ? '' : 'none';
+  });
+  const noResults = document.getElementById('noSearchResults');
+  const visibleRows = document.querySelectorAll('.list-row[style=""], .list-row:not([style])');
+  const anyVisible = Array.from(document.querySelectorAll('.list-row')).some(r => r.style.display !== 'none');
+  if (q && !anyVisible) {
+    if (!noResults) {
+      const el = document.createElement('div');
+      el.id = 'noSearchResults';
+      el.className = 'list-empty';
+      el.innerHTML = '<p>No matches found.</p>';
+      document.querySelector('.list-table').appendChild(el);
+    }
+  } else if (noResults) {
+    noResults.remove();
+  }
+});
+
+/* ---------- sort ---------- */
+let currentSort = { col: null, dir: null }; // dir: 'asc' | 'desc' | null
+
+function toggleSort(col) {
+  if (currentSort.col === col) {
+    if (currentSort.dir === 'asc') currentSort.dir = 'desc';
+    else if (currentSort.dir === 'desc') { currentSort.col = null; currentSort.dir = null; }
+  } else {
+    currentSort.col = col;
+    currentSort.dir = 'asc';
+  }
+  applySort();
+  updateSortArrows();
+}
+
+function applySort() {
+  const table = document.querySelector('.list-table');
+  const rows = Array.from(table.querySelectorAll('.list-row'));
+  if (!currentSort.col) {
+    // restore original order via data-idx
+    rows.sort((a, b) => parseInt(a.dataset.idx) - parseInt(b.dataset.idx));
+  } else if (currentSort.col === 'title') {
+    rows.sort((a, b) => {
+      const ta = (a.querySelector('.lr-title')?.textContent || '').toLowerCase();
+      const tb = (b.querySelector('.lr-title')?.textContent || '').toLowerCase();
+      return currentSort.dir === 'asc' ? ta.localeCompare(tb) : tb.localeCompare(ta);
+    });
+  } else if (currentSort.col === 'score') {
+    rows.sort((a, b) => {
+      const sa = parseInt(a.querySelector('.lr-score')?.textContent.replace(/[^\d]/g, '')) || 0;
+      const sb = parseInt(b.querySelector('.lr-score')?.textContent.replace(/[^\d]/g, '')) || 0;
+      return currentSort.dir === 'asc' ? sa - sb : sb - sa;
+    });
+  }
+  const header = table.querySelector('.list-header');
+  rows.forEach(r => table.appendChild(r));
+}
+
+function updateSortArrows() {
+  document.querySelectorAll('.list-header .sortable').forEach(span => {
+    const arrow = span.querySelector('.sort-arrow');
+    const col = span.dataset.sort;
+    if (col === currentSort.col) {
+      arrow.textContent = currentSort.dir === 'asc' ? ' ▲' : ' ▼';
+      span.classList.add('sort-active');
+    } else {
+      arrow.textContent = '⇅';
+      span.classList.remove('sort-active');
+    }
+  });
+}
+
+// tag rows with original index for restoring default order
+document.querySelectorAll('.list-row').forEach((r, i) => r.dataset.idx = i);
+</script>
+{% endblock %}

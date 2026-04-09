@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Search · AniTracker{% endblock %}
+{% block content %}
+
+<!-- Carousel Section -->
+{% if carousel %}
+<div class="carousel-container">
+  <h2 class="carousel-title">Trending {{ kind|capitalize }}</h2>
+  <div class="carousel-wrapper">
+    <button class="carousel-arrow left" onclick="slideCarousel(-1)" aria-label="Previous">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M15 18l-6-6 6-6"/>
+      </svg>
+    </button>
+    <div class="carousel" id="carousel" data-kind="{{ kind }}">
+      {% for item in carousel %}
+        {% set link = url_for('anime_detail', mal_id=item.mal_id) if kind=='anime' else url_for('manga_detail', mal_id=item.mal_id) %}
+        <a href="{{ link }}" class="carousel-card">
+          <div class="carousel-img" style="background-image: url('{{ item.images.jpg.large_image_url }}')"></div>
+          <div class="carousel-score">★ {{ item.score }}</div>
+          <div class="carousel-overlay">
+            <div class="carousel-card-title">{{ item.title_english or item.title }}</div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+    <button class="carousel-arrow right" onclick="slideCarousel(1)" aria-label="Next">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 18l6-6-6-6"/>
+      </svg>
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<form class="search-bar" method="get" action="{{ url_for('search') }}">
+  <input type="hidden" name="kind" value="{{ kind }}">
+  <div class="kind-toggle">
+    <a class="{{ 'on' if kind=='anime' else '' }}" href="{{ url_for('search', kind='anime') }}">Anime</a>
+    <a class="{{ 'on' if kind=='manga' else '' }}" href="{{ url_for('search', kind='manga') }}">Manga</a>
+  </div>
+  <input class="q" type="text" name="q" value="{{ q or '' }}" placeholder="Search title…">
+  <button class="btn primary" type="submit">Search</button>
+  <button class="btn" type="button" onclick="document.getElementById('adv').classList.toggle('open')">Advanced ▾</button>
+
+  <div id="adv" class="advanced">
+    <label>Genres
+      <select name="genres" multiple size="6">
+        {% for g in genres_list %}
+          <option value="{{ g.mal_id }}"
+            {% if (selected_genres or '') and (g.mal_id|string in selected_genres.split(',')) %}selected{% endif %}>
+            {{ g.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Min score
+      <select name="min_score">
+        <option value="">Any</option>
+        {% for s in [5,6,7,8,9] %}
+          <option value="{{ s }}" {% if min_score==s|string %}selected{% endif %}>{{ s }}+</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Status
+      <select name="status">
+        <option value="">Any</option>
+        {% if kind=='anime' %}
+          <option value="airing"   {% if status=='airing' %}selected{% endif %}>Airing</option>
+          <option value="complete" {% if status=='complete' %}selected{% endif %}>Complete</option>
+          <option value="upcoming" {% if status=='upcoming' %}selected{% endif %}>Upcoming</option>
+        {% else %}
+          <option value="publishing" {% if status=='publishing' %}selected{% endif %}>Publishing</option>
+          <option value="complete"   {% if status=='complete' %}selected{% endif %}>Complete</option>
+          <option value="hiatus"     {% if status=='hiatus' %}selected{% endif %}>Hiatus</option>
+        {% endif %}
+      </select>
+    </label>
+    <label>Type
+      <select name="type">
+        <option value="">Any</option>
+        {% if kind=='anime' %}
+          {% for t in ['tv','movie','ova','special','ona'] %}
+            <option value="{{ t }}" {% if type_==t %}selected{% endif %}>{{ t.upper() }}</option>
+          {% endfor %}
+        {% else %}
+          {% for t in ['manga','novel','lightnovel','oneshot','manhwa','manhua'] %}
+            <option value="{{ t }}" {% if type_==t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        {% endif %}
+      </select>
+    </label>
+    <label>Order by
+      <select name="order_by">
+        {% for o in ['members','score','popularity','rank','title','start_date'] %}
+          <option value="{{ o }}" {% if order_by==o %}selected{% endif %}>{{ o.replace('_', ' ').title() }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Sort
+      <select name="sort">
+        <option value="desc" {% if sort=='desc' %}selected{% endif %}>desc</option>
+        <option value="asc"  {% if sort=='asc'  %}selected{% endif %}>asc</option>
+      </select>
+    </label>
+  </div>
+</form>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+{% if results %}
+  <p class="search-info">Found {{ results|length }} results {% if q %}for "{{ q }}"{% endif %}</p>
+{% elif q %}
+  <p class="no-data">No results found for "{{ q }}". Try searching with the Japanese or English title.</p>
+{% endif %}
+
+<div class="grid">
+  {% for it in results %}
+    {% set link = url_for('anime_detail', mal_id=it.mal_id) if kind=='anime' else url_for('manga_detail', mal_id=it.mal_id) %}
+    <a class="card" href="{{ link }}">
+      <div class="cover" style="background-image:url('{{ it.images.jpg.large_image_url }}')"></div>
+      <div class="meta">
+        <div class="t">{{ it.title_english or it.title }}</div>
+        {% if it.title_english and it.title != it.title_english %}
+          <div class="sub jp-title">{{ it.title }}</div>
+        {% endif %}
+        <div class="sub">
+          {% if it.score %}★ {{ it.score }}{% endif %}
+          {% if it.episodes %} · {{ it.episodes }} eps{% endif %}
+          {% if it.chapters %} · {{ it.chapters }} ch{% endif %}
+        </div>
+      </div>
+    </a>
+  {% endfor %}
+</div>
+{% endblock %}

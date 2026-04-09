@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+{% block title %}{{ data.title }} · AniTracker{% endblock %}
+{% block content %}
+
+{% set banner = extras.banner or data.images.jpg.large_image_url %}
+{% set cover  = extras.cover_xl or data.images.jpg.large_image_url %}
+
+<section class="profile">
+  <div class="banner" style="background-image:linear-gradient(180deg, rgba(10,10,14,.25) 0%, rgba(10,10,14,.95) 100%), url('{{ banner }}')">
+    <button class="back-btn" onclick="history.back()" title="Go back">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Back
+    </button>
+  </div>
+
+  <div class="profile-body">
+    <aside class="side">
+      <img class="cover-art" src="{{ cover }}" alt="">
+      <button class="btn primary block" onclick="openTracker()">+ Add to My List</button>
+
+      <dl class="facts">
+        <dt>Type</dt>      <dd>{{ data.type or '—' }}</dd>
+        <dt>Status</dt>    <dd>{{ data.status or '—' }}</dd>
+        {% if kind=='anime' %}
+          <dt>Episodes</dt><dd>{{ data.episodes or '?' }}</dd>
+          <dt>Aired</dt>   <dd>{{ data.aired.string if data.aired else '—' }}</dd>
+        {% else %}
+          <dt>Chapters</dt><dd>{{ data.chapters or '?' }}</dd>
+          <dt>Volumes</dt> <dd>{{ data.volumes or '?' }}</dd>
+          <dt>Published</dt><dd>{{ data.published.string if data.published else '—' }}</dd>
+        {% endif %}
+        <dt>Rating</dt>    <dd>{{ data.rating or '—' }}</dd>
+        {% if data.themes %}
+          <dt>Themes</dt>
+          <dd>{% for t in data.themes %}<span class="pill">{{ t.name }}</span>{% endfor %}</dd>
+        {% endif %}
+        {% if data.demographics %}
+          <dt>Demographic</dt>
+          <dd>{% for d in data.demographics %}<span class="pill">{{ d.name }}</span>{% endfor %}</dd>
+        {% endif %}
+        {% if data.studios %}
+          <dt>Studios</dt>
+          <dd>{% for s in data.studios %}<span class="pill">{{ s.name }}</span>{% endfor %}</dd>
+        {% endif %}
+      </dl>
+    </aside>
+
+    <div class="main">
+      <div class="title-row">
+        <div>
+          <h1>{{ data.title_english or data.title }}</h1>
+          {% if data.title_english and data.title != data.title_english %}
+            <div class="jp">{{ data.title }}</div>
+          {% elif data.title_japanese %}
+            <div class="jp">{{ data.title_japanese }}</div>
+          {% endif %}
+        </div>
+        <div class="scores">
+          {% if data.score %}<div class="score"><span>★</span>{{ data.score }}<small>{{ data.scored_by or 0 }} votes</small></div>{% endif %}
+        </div>
+      </div>
+
+      <div class="genres">
+        {% for g in data.genres %}<span class="genre">{{ g.name }}</span>{% endfor %}
+      </div>
+
+      <h3>Synopsis</h3>
+      {% set clean_synopsis = (data.synopsis or 'No synopsis available.')|replace('[Written by MAL Rewrite]', '')|trim %}
+      {% if clean_synopsis|length > 400 %}
+        <p class="synopsis" id="synopsis-text">{{ clean_synopsis[:400] }}...<button class="read-more-btn" onclick="toggleSynopsis()">Read more</button></p>
+        <p class="synopsis hidden" id="synopsis-full">{{ clean_synopsis }}<button class="read-more-btn" onclick="toggleSynopsis()">Read less</button></p>
+      {% else %}
+        <p class="synopsis">{{ clean_synopsis }}</p>
+      {% endif %}
+
+      <!-- Tabs -->
+      <div class="tabs-section">
+        <div class="tabs">
+          {% if kind == 'anime' %}
+          <button class="tab active" onclick="switchTab('trailer')">Trailer</button>
+          <button class="tab" onclick="switchTab('relations')">Relations</button>
+          <button class="tab" onclick="switchTab('links')">Links</button>
+          {% else %}
+          <button class="tab active" onclick="switchTab('relations')">Relations</button>
+          <button class="tab" onclick="switchTab('links')">Links</button>
+          {% endif %}
+        </div>
+
+        {% if kind == 'anime' %}
+        <!-- Trailer Tab -->
+        <div class="tab-content active" id="tab-trailer">
+          {% set yt_id = data.trailer.youtube_id if data.trailer else None %}
+          {% if not yt_id and data.trailer and data.trailer.embed_url %}
+            {% set yt_id = data.trailer.embed_url.split('/embed/')[-1].split('?')[0] if '/embed/' in data.trailer.embed_url else None %}
+          {% endif %}
+          {% if yt_id %}
+            <div class="trailer-embed">
+              <iframe 
+                src="https://www.youtube.com/embed/{{ yt_id }}" 
+                frameborder="0" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowfullscreen>
+              </iframe>
+            </div>
+          {% else %}
+            <p class="no-data">No trailer available.</p>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Relations Tab -->
+        <div class="tab-content {{ 'active' if kind == 'manga' }}" id="tab-relations">
+          {% set filtered_relations = [] %}
+          {% if data.relations %}
+            {% for rel in data.relations %}
+              {% if rel.relation in ['Prequel', 'Sequel', 'Alternative version'] or 
+                    (rel.relation == 'Adaptation' and kind == 'anime') %}
+                {% set _ = filtered_relations.append(rel) %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          
+          {% if filtered_relations %}
+            {% for rel in filtered_relations %}
+              <div class="relation-group">
+                <h4 class="relation-type">{{ rel.relation }}</h4>
+                <div class="relation-cards-scroll">
+                  {% for item in rel.entry %}
+                    {% set img_url = '' %}
+                    {% if item.images and item.images.jpg %}
+                      {% set img_url = item.images.jpg.large_image_url or item.images.jpg.image_url %}
+                    {% endif %}
+                    <a href="/{{ item.type }}/{{ item.mal_id }}" class="relation-card">
+                      {% if img_url %}
+                        <div class="relation-cover" style="background-image: url('{{ img_url }}')"></div>
+                      {% else %}
+                        <div class="relation-cover no-image">?</div>
+                      {% endif %}
+                      <div class="relation-info">
+                        <div class="relation-title">{{ item.name }}</div>
+                        <div class="relation-meta">{{ item.type|capitalize }}</div>
+                      </div>
+                    </a>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <p class="no-data">No relations found.</p>
+          {% endif %}
+        </div>
+
+        <!-- Links Tab -->
+        <div class="tab-content" id="tab-links">
+          {% set link_list = [] %}
+          {% if data.external %}
+            {% for link in data.external %}
+              {% if not ('ja.' in link.url or '.jp' in link.url or 'japanese' in link.url.lower()) %}
+                {% set _ = link_list.append(link) %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          {% if data.streaming %}
+            {% for stream in data.streaming %}
+              {% if not ('ja.' in stream.url or '.jp' in stream.url) %}
+                {% set _ = link_list.append(stream) %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          
+          {% if link_list %}
+            <div class="links-grid">
+              {% for link in link_list %}
+                {% set domain = link.url.split('://')[1].split('/')[0] if '://' in link.url else link.url.split('/')[0] %}
+                <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" class="link-card">
+                  <div class="link-icon">
+                    <img src="https://www.google.com/s2/favicons?domain={{ domain }}&sz=64" 
+                         alt="{{ link.name }}" 
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';"
+                         class="favicon">
+                    <span class="fallback-icon" style="display:none;">🔗</span>
+                  </div>
+                  <div class="link-text">{{ link.name }}</div>
+                  <div class="link-arrow">→</div>
+                </a>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="no-data">No external links available.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="modal-overlay" id="tracker">
+  <div class="modal-card tracker-modal">
+    <div class="modal-header">
+      <h2>{{ 'Edit Entry' if entry else 'Add to My List' }}</h2>
+      <button class="modal-close" onclick="closeTracker()">✕</button>
+    </div>
+    <div class="edit-modal-body">
+      <div class="edit-cover-wrap">
+        <img src="{{ extras.cover_xl or data.images.jpg.large_image_url }}" alt="">
+      </div>
+      <div class="edit-fields">
+        <h3>{{ data.title_english or data.title }}</h3>
+        {% if data.title_english and data.title != data.title_english %}<p class="tracker-jp">{{ data.title }}</p>{% endif %}
+        <div class="form-group">
+          <label for="t-status">Status</label>
+          <select id="t-status">
+            {% for s in statuses %}
+            <option value="{{ s }}" {% if entry and entry.status==s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="edit-row">
+          <div class="form-group">
+            <label>{{ 'Episodes' if kind=='anime' else 'Chapters' }}</label>
+            <div class="progress-input-wrap">
+              <button type="button" class="progress-btn" onclick="trackerAdjust(-1)">−</button>
+              <input type="number" id="t-progress" min="0"
+                     max="{{ (data.episodes if kind=='anime' else data.chapters) or '' }}"
+                     value="{{ entry.progress if entry else 0 }}"
+                     oninput="trackerClamp()">
+              <span class="progress-total">/ {{ (data.episodes if kind=='anime' else data.chapters) or '?' }}</span>
+              <button type="button" class="progress-btn" onclick="trackerAdjust(1)">+</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="t-score">Score</label>
+            <select id="t-score">
+              <option value="">— Select —</option>
+              <option value="10" {% if entry and entry.score==10 %}selected{% endif %}>10 — Masterpiece</option>
+              <option value="9" {% if entry and entry.score==9 %}selected{% endif %}>9 — Great</option>
+              <option value="8" {% if entry and entry.score==8 %}selected{% endif %}>8 — Very Good</option>
+              <option value="7" {% if entry and entry.score==7 %}selected{% endif %}>7 — Good</option>
+              <option value="6" {% if entry and entry.score==6 %}selected{% endif %}>6 — Fine</option>
+              <option value="5" {% if entry and entry.score==5 %}selected{% endif %}>5 — Average</option>
+              <option value="4" {% if entry and entry.score==4 %}selected{% endif %}>4 — Bad</option>
+              <option value="3" {% if entry and entry.score==3 %}selected{% endif %}>3 — Very Bad</option>
+              <option value="2" {% if entry and entry.score==2 %}selected{% endif %}>2 — Horrible</option>
+              <option value="1" {% if entry and entry.score==1 %}selected{% endif %}>1 — Appalling</option>
+            </select>
+          </div>
+        </div>
+        <div class="edit-actions">
+          <button class="btn" onclick="closeTracker()">Cancel</button>
+          <button class="btn primary" onclick="saveTracker()">{{ 'Save Changes' if entry else 'Add to List' }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.TRACK = {
+    kind:            "{{ kind }}",
+    mal_id:          {{ data.mal_id }},
+    title:           {{ data.title|tojson }},
+    title_english:   {{ (data.title_english or data.title)|tojson }},
+    title_japanese:  {{ (data.title_japanese or '')|tojson }},
+    cover_url:       {{ (extras.cover_xl or data.images.jpg.large_image_url)|tojson }},
+    total:           {{ (data.episodes if kind=='anime' else data.chapters) or 0 }},
+  };
+  const _trackerMax = {{ (data.episodes if kind=='anime' else data.chapters) or 0 }};
+  function trackerClamp() {
+    const inp = document.getElementById('t-progress');
+    let v = parseInt(inp.value) || 0;
+    if (v < 0) v = 0;
+    if (_trackerMax > 0 && v > _trackerMax) v = _trackerMax;
+    inp.value = v;
+  }
+  function trackerAdjust(delta) {
+    const inp = document.getElementById('t-progress');
+    const max = _trackerMax || 99999;
+    let v = parseInt(inp.value) || 0;
+    v = Math.max(0, Math.min(max, v + delta));
+    inp.value = v;
+  }
+</script>
+{% endblock %}

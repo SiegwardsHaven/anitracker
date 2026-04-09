@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}AniTracker{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=18">
+</head>
+<body>
+  <nav class="topnav">
+    <a class="brand" href="{{ url_for('home') }}">Ani<span>Tracker</span></a>
+    <div class="nav-links">
+      <a href="{{ url_for('search') }}">Search</a>
+      <a href="{{ url_for('my_list', kind='anime') }}">My Lists</a>
+    </div>
+    <div class="nav-user">
+      {% if current_user.is_authenticated %}
+        <div class="nav-profile-dropdown">
+          <button class="nav-avatar-btn" onclick="this.parentElement.classList.toggle('open')">
+            {% if current_user.avatar_url %}
+              <img src="{{ current_user.avatar_url }}" alt="avatar" class="nav-avatar-img">
+            {% else %}
+              <span class="nav-avatar-letter">{{ current_user.username[0]|upper }}</span>
+            {% endif %}
+            <span class="nav-username">{{ current_user.username }}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="nav-dropdown-menu">
+            <a href="{{ url_for('profile') }}">Profile</a>
+            <a href="{{ url_for('statistics') }}">Statistics</a>
+            <a href="{{ url_for('my_list', kind='anime') }}">My Lists</a>
+            <hr>
+            <a href="{{ url_for('logout') }}">Logout</a>
+          </div>
+        </div>
+      {% else %}
+        <a href="{{ url_for('login') }}" class="btn-login">Login</a>
+        <a href="{{ url_for('register') }}" class="btn primary">Sign Up</a>
+      {% endif %}
+    </div>
+  </nav>
+  <main class="page">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-container">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <p>&copy; {{ now.year if now else "2026" }} NeoByte Labs. All rights reserved.</p>
+  </footer>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=14"></script>
+  <script>
+    document.addEventListener('click', function(e) {
+      document.querySelectorAll('.nav-profile-dropdown.open').forEach(function(d) {
+        if (!d.contains(e.target)) d.classList.remove('open');
+      });
+    });
+  </script>
+</body>
+</html>

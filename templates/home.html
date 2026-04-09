@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>Track every anime &amp; manga you love.</h1>
+  <p>Powered by Jikan (MyAnimeList) and AniList. Build your library, rate, and progress.</p>
+  <div class="hero-cta">
+    <a class="btn primary" href="{{ url_for('search', kind='anime') }}">Browse Anime</a>
+    <a class="btn"        href="{{ url_for('search', kind='manga') }}">Browse Manga</a>
+  </div>
+</section>
+{% endblock %}

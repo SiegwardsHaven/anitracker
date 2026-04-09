@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Register · AniTracker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=5">
+</head>
+<body class="auth-body">
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-brand">Ani<span>Tracker</span></div>
+      <h1>Create Account</h1>
+      <p class="auth-subtitle">Join AniTracker to start tracking</p>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST" action="{{ url_for('register') }}" class="auth-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" required
+                 placeholder="Choose a username" autocomplete="username"
+                 minlength="3" maxlength="30">
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required
+                 placeholder="At least 8 characters" autocomplete="new-password"
+                 minlength="8">
+        </div>
+
+        <div class="form-group">
+          <label for="confirm_password">Confirm Password</label>
+          <input type="password" id="confirm_password" name="confirm_password" required
+                 placeholder="Re-enter password" autocomplete="new-password"
+                 minlength="8">
+        </div>
+
+        <div class="form-group">
+          <label for="security_question">Security Question</label>
+          <select id="security_question" name="security_question" required>
+            <option value="">Choose a security question...</option>
+            <option value="What was your first pet's name?">What was your first pet's name?</option>
+            <option value="What city were you born in?">What city were you born in?</option>
+            <option value="What is your mother's maiden name?">What is your mother's maiden name?</option>
+            <option value="What was your favorite anime as a child?">What was your favorite anime as a child?</option>
+            <option value="What is your favorite manga character?">What is your favorite manga character?</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="security_answer">Security Answer</label>
+          <input type="text" id="security_answer" name="security_answer" required
+                 placeholder="Enter your answer" autocomplete="off">
+        </div>
+
+        <button type="submit" class="btn primary block">Create Account</button>
+      </form>
+
+      <div class="auth-footer">
+        Already have an account? <a href="{{ url_for('login') }}">Log in</a>
+      </div>
+    </div>
+    <p class="auth-copyright">&copy; 2026 NeoByte Labs</p>
+  </div>
+</body>
+</html>

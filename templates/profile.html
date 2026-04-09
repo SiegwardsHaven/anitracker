@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Profile · AniTracker{% endblock %}
+{% block content %}
+
+<div class="profile-page">
+  <!-- ───── Header ───── -->
+  <div class="profile-header">
+    <div class="profile-avatar-wrap" id="avatarWrap">
+      {% if profile.avatar_url %}
+        <img src="{{ profile.avatar_url }}" alt="avatar" class="profile-avatar-img">
+      {% else %}
+        <div class="profile-avatar-placeholder">{{ profile.username[0]|upper }}</div>
+      {% endif %}
+      <button class="avatar-edit-btn" onclick="document.getElementById('avatarModal').classList.add('open')" title="Change avatar">✎</button>
+    </div>
+    <div class="profile-info">
+      <h1>{{ profile.username }}</h1>
+      <p class="profile-joined">Joined {{ profile.created_at.strftime('%B %Y') }}</p>
+    </div>
+  </div>
+
+  <!-- ───── Account Settings ───── -->
+  <h2 class="profile-section-title">Account Settings</h2>
+
+  <!-- Security Question -->
+  <div class="settings-card">
+    <h3><svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Security Question</h3>
+    {% if profile.has_security_question %}
+      <div class="sq-current">
+        <div class="sq-row">
+          <span class="sq-label">Question</span>
+          <span class="sq-value">{{ profile.security_question }}</span>
+        </div>
+        <div class="sq-row">
+          <span class="sq-label">Answer</span>
+          <span class="sq-value sq-masked">*****</span>
+        </div>
+      </div>
+    {% else %}
+      <p class="settings-warn">No security question set — you won't be able to reset your password.</p>
+    {% endif %}
+    <details class="sq-update">
+      <summary>{{ 'Update' if profile.has_security_question else 'Set' }} Security Question</summary>
+      <div class="sq-form">
+        <div class="form-group">
+          <label for="sq-select">Question</label>
+          <select id="sq-select">
+            <option value="">Choose a security question...</option>
+            <option value="What was your first pet's name?">What was your first pet's name?</option>
+            <option value="What city were you born in?">What city were you born in?</option>
+            <option value="What is your mother's maiden name?">What is your mother's maiden name?</option>
+            <option value="What was your favorite anime as a child?">What was your favorite anime as a child?</option>
+            <option value="What is your favorite manga character?">What is your favorite manga character?</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="sq-answer">Answer</label>
+          <input type="text" id="sq-answer" placeholder="Enter your answer">
+        </div>
+        <button class="btn primary" onclick="saveSecurityQuestion()">Save Security Question</button>
+      </div>
+    </details>
+  </div>
+
+  <!-- Data Wipe -->
+  <div class="settings-card">
+    <h3><svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> Wipe All Data</h3>
+    <p class="settings-desc">Remove all anime and manga list entries. Your account and settings will be kept.</p>
+    <button class="btn danger" onclick="openConfirmModal('wipe')">Wipe All Anime &amp; Manga Data</button>
+  </div>
+
+  <!-- Account Deletion -->
+  <div class="settings-card">
+    <h3><svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Delete Account</h3>
+    <p class="settings-desc">Permanently delete your account and all associated data. This cannot be undone.</p>
+    <button class="btn danger" onclick="openConfirmModal('delete')">Delete My Account</button>
+  </div>
+</div>
+
+<!-- ═══════ Confirm Action Modal ═══════ -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-card confirm-modal">
+    <div class="modal-header">
+      <h2 id="confirm-heading"></h2>
+      <button class="modal-close" onclick="closeConfirmModal()">✕</button>
+    </div>
+    <p id="confirm-desc" class="settings-desc"></p>
+    <div class="form-group">
+      <label for="confirm-username">Type your username <strong>{{ profile.username }}</strong> to confirm</label>
+      <input type="text" id="confirm-username" placeholder="Enter username" autocomplete="off">
+    </div>
+    <p class="confirm-error" id="confirm-error" style="display:none;">Username does not match.</p>
+    <div class="edit-actions">
+      <button class="btn" onclick="closeConfirmModal()">Cancel</button>
+      <button class="btn danger" id="confirm-action-btn" onclick="executeConfirmAction()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ Avatar Modal ═══════ -->
+<div class="modal-overlay" id="avatarModal">
+  <div class="modal-card avatar-modal">
+    <div class="modal-header">
+      <h2>Choose Avatar</h2>
+      <button class="modal-close" onclick="document.getElementById('avatarModal').classList.remove('open')">✕</button>
+    </div>
+
+    <!-- Grouped anime character carousels -->
+    {% for anime, chars in grouped_avatars.items() %}
+    <div class="avatar-group">
+      <h4 class="avatar-group-title">{{ anime }}</h4>
+      <div class="avatar-carousel-wrap">
+        <button class="avatar-carousel-arrow left" onclick="slideGroup(this,-1)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <div class="avatar-carousel">
+          {% for av in chars %}
+          {% if av.url %}
+          <div class="avatar-option" onclick="selectAvatar('{{ av.url }}')" title="{{ av.name }}">
+            <img src="{{ av.url }}" alt="{{ av.name }}">
+            <span class="avatar-option-name">{{ av.name }}</span>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+        <button class="avatar-carousel-arrow right" onclick="slideGroup(this,1)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+    </div>
+    {% endfor %}
+
+    <h4 class="avatar-section-title" style="margin-top:24px;">Upload from Computer</h4>
+    <input type="file" id="avatarFileInput" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+    <button class="btn primary block" onclick="document.getElementById('avatarFileInput').click()">Choose Image File</button>
+    <p class="upload-hint">Max 2 MB · PNG, JPG, GIF, WebP</p>
+  </div>
+</div>
+
+<script>
+function selectAvatar(url) {
+  if (!url) return;
+  fetch('/api/profile/avatar', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({avatar_url: url})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) location.reload();
+  });
+}
+
+/* File upload */
+document.getElementById('avatarFileInput').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { alert('File too large (max 2 MB).'); return; }
+  const fd = new FormData();
+  fd.append('file', file);
+  fetch('/api/profile/upload-avatar', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => { if (d.ok) location.reload(); else alert(d.error || 'Upload failed'); });
+});
+
+function saveSecurityQuestion() {
+  const q = document.getElementById('sq-select').value;
+  const a = document.getElementById('sq-answer').value.trim();
+  if (!q || !a) { alert('Please select a question and enter an answer.'); return; }
+  fetch('/api/profile/security-question', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({question: q, answer: a})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) location.reload();
+  });
+}
+
+function confirmWipe() {
+  openConfirmModal('wipe');
+}
+
+function confirmDelete() {
+  openConfirmModal('delete');
+}
+
+let _confirmAction = null;
+
+function openConfirmModal(action) {
+  _confirmAction = action;
+  const heading = document.getElementById('confirm-heading');
+  const desc = document.getElementById('confirm-desc');
+  const btn = document.getElementById('confirm-action-btn');
+  const errorEl = document.getElementById('confirm-error');
+  document.getElementById('confirm-username').value = '';
+  errorEl.style.display = 'none';
+
+  if (action === 'wipe') {
+    heading.textContent = 'Wipe All Data';
+    desc.textContent = 'This will permanently delete all your anime and manga list entries. Your account and settings will be kept.';
+    btn.textContent = 'Wipe All Data';
+  } else {
+    heading.textContent = 'Delete Account';
+    desc.textContent = 'This will permanently delete your account and all associated data. This action cannot be undone.';
+    btn.textContent = 'Delete Account';
+  }
+  document.getElementById('confirmModal').classList.add('open');
+  document.getElementById('confirm-username').focus();
+}
+
+function closeConfirmModal() {
+  document.getElementById('confirmModal').classList.remove('open');
+  _confirmAction = null;
+}
+
+async function executeConfirmAction() {
+  const input = document.getElementById('confirm-username').value.trim();
+  const errorEl = document.getElementById('confirm-error');
+  if (input !== '{{ profile.username }}') {
+    errorEl.style.display = 'block';
+    return;
+  }
+  errorEl.style.display = 'none';
+
+  if (_confirmAction === 'wipe') {
+    const res = await fetch('/api/profile/wipe-data', { method: 'POST' });
+    const d = await res.json();
+    if (d.ok) { closeConfirmModal(); alert('All data has been wiped.'); location.reload(); }
+  } else if (_confirmAction === 'delete') {
+    const res = await fetch('/api/profile/delete-account', { method: 'POST' });
+    const d = await res.json();
+    if (d.ok) { closeConfirmModal(); window.location.href = '/login'; }
+  }
+}
+
+function slideGroup(btn, dir) {
+  const wrap = btn.closest('.avatar-carousel-wrap');
+  const c = wrap.querySelector('.avatar-carousel');
+  c.scrollBy({left: dir * 240, behavior: 'smooth'});
+}
+</script>
+{% endblock %}

@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Statistics · AniTracker{% endblock %}
+{% block content %}
+
+<div class="stats-page">
+  <h1 class="stats-page-title">Your Statistics</h1>
+
+  <!-- ───── Overview Cards ───── -->
+  <div class="stats-overview">
+    <div class="overview-card">
+      <span class="overview-value">{{ anime_stats.total }}</span>
+      <span class="overview-label">Anime</span>
+    </div>
+    <div class="overview-card">
+      <span class="overview-value">{{ manga_stats.total }}</span>
+      <span class="overview-label">Manga</span>
+    </div>
+    <div class="overview-card">
+      <span class="overview-value">{{ anime_stats.total_episodes }}</span>
+      <span class="overview-label">Episodes Watched</span>
+    </div>
+    <div class="overview-card">
+      <span class="overview-value">{{ manga_stats.total_chapters }}</span>
+      <span class="overview-label">Chapters Read</span>
+    </div>
+    <div class="overview-card">
+      <span class="overview-value">{{ anime_stats.avg_score or '—' }}</span>
+      <span class="overview-label">Avg Anime Score</span>
+    </div>
+    <div class="overview-card">
+      <span class="overview-value">{{ manga_stats.avg_score or '—' }}</span>
+      <span class="overview-label">Avg Manga Score</span>
+    </div>
+  </div>
+
+  <!-- ───── Anime Section ───── -->
+  <div class="stats-section">
+    <h2>Anime</h2>
+    <div class="stats-panels">
+      <!-- Status Breakdown -->
+      <div class="stats-card">
+        <h3>Status Breakdown</h3>
+        {% set atotal = anime_stats.total or 1 %}
+        <div class="donut-chart" style="background: conic-gradient(
+          {% set ns = namespace(offset=0) %}
+          {% for s in anime_statuses %}
+            {{ status_colors.get(s, '#888') }} {{ ns.offset }}deg {{ ns.offset + (anime_stats.by_status.get(s, 0) / atotal * 360) }}deg
+            {% set ns.offset = ns.offset + (anime_stats.by_status.get(s, 0) / atotal * 360) %}
+            {% if not loop.last %},{% endif %}
+          {% endfor %}
+        );">
+          <div class="donut-hole">
+            <span class="donut-number">{{ anime_stats.total }}</span>
+            <span class="donut-label">Total</span>
+          </div>
+        </div>
+        <div class="chart-legend">
+          {% for s in anime_statuses %}
+          <div class="legend-item">
+            <span class="legend-dot" style="background: {{ status_colors.get(s, '#888') }}"></span>
+            <span class="legend-name">{{ s }}</span>
+            <span class="legend-count">{{ anime_stats.by_status.get(s, 0) }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Score Distribution -->
+      <div class="stats-card">
+        <h3>Score Distribution</h3>
+        <div class="bar-chart">
+          {% set max_score_count = anime_stats.score_distribution.values()|max if anime_stats.scored_count > 0 else 1 %}
+          {% for i in range(10, 0, -1) %}
+          {% set count = anime_stats.score_distribution.get(i|string, 0) %}
+          <div class="bar-row">
+            <span class="bar-label">{{ i }}</span>
+            <div class="bar-track">
+              <div class="bar-fill" style="width: {{ (count / (max_score_count or 1) * 100)|round }}%; background: linear-gradient(90deg, var(--accent), var(--accent-2));"></div>
+            </div>
+            <span class="bar-count">{{ count }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───── Manga Section ───── -->
+  <div class="stats-section">
+    <h2>Manga</h2>
+    <div class="stats-panels">
+      <!-- Status Breakdown -->
+      <div class="stats-card">
+        <h3>Status Breakdown</h3>
+        {% set mtotal = manga_stats.total or 1 %}
+        <div class="donut-chart" style="background: conic-gradient(
+          {% set ns = namespace(offset=0) %}
+          {% for s in manga_statuses %}
+            {{ status_colors.get(s, '#888') }} {{ ns.offset }}deg {{ ns.offset + (manga_stats.by_status.get(s, 0) / mtotal * 360) }}deg
+            {% set ns.offset = ns.offset + (manga_stats.by_status.get(s, 0) / mtotal * 360) %}
+            {% if not loop.last %},{% endif %}
+          {% endfor %}
+        );">
+          <div class="donut-hole">
+            <span class="donut-number">{{ manga_stats.total }}</span>
+            <span class="donut-label">Total</span>
+          </div>
+        </div>
+        <div class="chart-legend">
+          {% for s in manga_statuses %}
+          <div class="legend-item">
+            <span class="legend-dot" style="background: {{ status_colors.get(s, '#888') }}"></span>
+            <span class="legend-name">{{ s }}</span>
+            <span class="legend-count">{{ manga_stats.by_status.get(s, 0) }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Score Distribution -->
+      <div class="stats-card">
+        <h3>Score Distribution</h3>
+        <div class="bar-chart">
+          {% set max_score_count_m = manga_stats.score_distribution.values()|max if manga_stats.scored_count > 0 else 1 %}
+          {% for i in range(10, 0, -1) %}
+          {% set count = manga_stats.score_distribution.get(i|string, 0) %}
+          <div class="bar-row">
+            <span class="bar-label">{{ i }}</span>
+            <div class="bar-track">
+              <div class="bar-fill" style="width: {{ (count / (max_score_count_m or 1) * 100)|round }}%; background: linear-gradient(90deg, var(--accent), var(--accent-2));"></div>
+            </div>
+            <span class="bar-count">{{ count }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
