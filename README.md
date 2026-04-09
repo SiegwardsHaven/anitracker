@@ -17,6 +17,12 @@
   <img src="https://img.shields.io/badge/AniList-GraphQL-blue?logo=anilist" alt="AniList">
 </p>
 
+<p align="center">
+  <a href="https://anitracker-6afy.onrender.com" target="_blank">
+    <img src="https://img.shields.io/badge/🚀_Live_Demo-ff4d8d?style=for-the-badge" alt="Live Demo">
+  </a>
+</p>
+
 ---
 
 ## Features
