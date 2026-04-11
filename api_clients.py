@@ -47,8 +47,26 @@ def _cached_get(key: str, fetcher, ttl: float = _CACHE_TTL):
 # ----------------------- JIKAN -----------------------
 
 def jikan_get(path: str, params: dict | None = None) -> dict:
-    _throttle()
-    r = _session.get(f"{JIKAN_BASE}{path}", params=params or {}, timeout=15)
+    """GET from Jikan with throttle and automatic retry on 429 / 5xx."""
+    for attempt in range(3):
+        _throttle()
+        try:
+            r = _session.get(f"{JIKAN_BASE}{path}", params=params or {}, timeout=15)
+        except requests.RequestException:
+            if attempt < 2:
+                time.sleep(1.5)
+                continue
+            raise
+        if r.status_code == 429:
+            # back off and retry
+            time.sleep(2 + attempt * 2)
+            continue
+        if r.status_code >= 500 and attempt < 2:
+            time.sleep(1.5)
+            continue
+        r.raise_for_status()
+        return r.json()
+    # final attempt, let it raise
     r.raise_for_status()
     return r.json()
 
@@ -90,16 +108,17 @@ def _title_matches(item: dict, query: str) -> bool:
 
 def _search_with_filter(endpoint: str, query: str, *, genres: str = "",
                         min_score: str = "", status: str = "", type_: str = "",
-                        order_by: str = "members", sort: str = "desc") -> dict:
-    """Fetch up to 4 API pages and collect all title-matched results.
+                        order_by: str = "members", sort: str = "desc",
+                        max_pages: int = 4) -> dict:
+    """Fetch up to max_pages API pages and collect all title-matched results.
 
     Because Jikan does loose word matching, a query like "My Dress-Up Darling"
     may scatter relevant entries (Season 1, Season 2, …) across multiple pages
     filled with unrelated titles.  This helper aggregates them.
+    Filter-only searches (no text) use more pages for comprehensive coverage.
     """
     all_matched: list[dict] = []
     seen_ids: set[int] = set()
-    max_pages = 4
 
     for pg in range(1, max_pages + 1):
         params = {
@@ -134,17 +153,22 @@ def _search_with_filter(endpoint: str, query: str, *, genres: str = "",
 def search_anime(query: str, *, genres: str = "", min_score: str = "",
                  status: str = "", type_: str = "", order_by: str = "members",
                  sort: str = "desc", **_kw) -> dict:
+    # Filter-only (no text query) fetches more pages for full coverage
+    pages = 3 if query else 6
     return _search_with_filter("/anime", query, genres=genres,
                                min_score=min_score, status=status,
-                               type_=type_, order_by=order_by, sort=sort)
+                               type_=type_, order_by=order_by, sort=sort,
+                               max_pages=pages)
 
 
 def search_manga(query: str, *, genres: str = "", min_score: str = "",
                  status: str = "", type_: str = "", order_by: str = "members",
                  sort: str = "desc", **_kw) -> dict:
+    pages = 3 if query else 6
     return _search_with_filter("/manga", query, genres=genres,
                                min_score=min_score, status=status,
-                               type_=type_, order_by=order_by, sort=sort)
+                               type_=type_, order_by=order_by, sort=sort,
+                               max_pages=pages)
 
 
 def get_anime(mal_id: int) -> dict:
@@ -189,24 +213,30 @@ def get_genres(kind: str = "anime") -> list[dict]:
     return _cached_get(key, lambda: jikan_get(f"/genres/{kind}").get("data", []), ttl=3600)
 
 
-def get_top_rated_carousel(kind: str = "anime", limit: int = 20) -> list[dict]:
-    """Fetch well-known, trending anime/manga with high scores for carousel.
-    Orders by popularity (members) to get trending titles, filtered by high MAL scores (7+).
-    Cached for 8 hours, shuffled once at cache time.
+def get_top_rated_carousel(kind: str = "anime", limit: int = 25) -> list[dict]:
+    """Fetch top anime/manga by member count for the hero carousel.
+    Fetches 1 Jikan page (up to 25 items), sorted by members descending.
+    Cached for 8 hours.
     """
-    import random
-    key = f"carousel:{kind}"
+    key = f"carousel_v4:{kind}"
     def _fetch():
+        all_items: list[dict] = []
+        seen: set[int] = set()
         params = {
             "min_score": "7",
             "order_by": "members",
             "sort": "desc",
             "limit": 25,
+            "page": 1,
             "sfw": "true",
         }
         data = jikan_get(f"/{kind}", params).get("data", [])
-        random.shuffle(data)
-        return data
+        for item in data:
+            mid = item.get("mal_id")
+            if mid and mid not in seen:
+                seen.add(mid)
+                all_items.append(item)
+        return all_items
     results = _cached_get(key, _fetch, ttl=28800)  # 8 hours
     return results[:limit]
 

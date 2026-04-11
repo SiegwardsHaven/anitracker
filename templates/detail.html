@@ -293,6 +293,8 @@
     title_japanese:  {{ (data.title_japanese or '')|tojson }},
     cover_url:       {{ (extras.cover_xl or data.images.jpg.large_image_url)|tojson }},
     total:           {{ (data.episodes if kind=='anime' else data.chapters) or 0 }},
+    genres:          {{ (data.genres|map(attribute='name')|list)|tojson }},
+    studios:         {{ (data.studios|default([])|map(attribute='name')|list)|tojson }},
   };
   const _trackerMax = {{ (data.episodes if kind=='anime' else data.chapters) or 0 }};
   function trackerClamp() {

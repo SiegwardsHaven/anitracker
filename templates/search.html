@@ -155,7 +155,7 @@
   {% endfor %}
 </div>
 
-{% if results and results|length > 50 %}
+{% if results and results|length > 100 %}
 <nav class="pagination" id="searchPagination"></nav>
 {% endif %}
 
@@ -173,7 +173,7 @@
   });
 
   /* ── Client-side pagination (50 per page) ── */
-  var PER_PAGE = 50;
+  var PER_PAGE = 100;
   var cards = document.querySelectorAll('.search-result-card');
   var totalCards = cards.length;
   var totalPages = Math.ceil(totalCards / PER_PAGE);

@@ -213,12 +213,12 @@ function selectAvatar(url) {
 document.getElementById('avatarFileInput').addEventListener('change', function () {
   const file = this.files[0];
   if (!file) return;
-  if (file.size > 2 * 1024 * 1024) { alert('File too large (max 2 MB).'); return; }
+  if (file.size > 2 * 1024 * 1024) { showToast('File too large (max 2 MB).', 'error'); return; }
   const fd = new FormData();
   fd.append('file', file);
   fetch('/api/profile/upload-avatar', { method: 'POST', body: fd })
     .then(r => r.json())
-    .then(d => { if (d.ok) location.reload(); else alert(d.error || 'Upload failed'); });
+    .then(d => { if (d.ok) location.reload(); else showToast(d.error || 'Upload failed', 'error'); });
 });
 
 /* ── Password Gate ── */
@@ -303,12 +303,12 @@ function addSecurityQuestion() {
   });
 }
 
-function editSecurityQuestion(index) {
+async function editSecurityQuestion(index) {
   var entry = document.querySelector('.sq-entry[data-index="'+index+'"]');
   var question = entry.querySelector('.sq-entry-question').textContent;
-  var newQ = prompt('Security Question:', question);
+  var newQ = await showPrompt('Edit Security Question', 'Security Question:', question);
   if (!newQ) return;
-  var newA = prompt('New Answer:');
+  var newA = await showPrompt('Edit Answer', 'New Answer:');
   if (!newA) return;
   fetch('/api/profile/security-questions/update', {
     method: 'POST',
@@ -316,19 +316,20 @@ function editSecurityQuestion(index) {
     body: JSON.stringify({index: index, question: newQ.trim(), answer: newA.trim()})
   }).then(r => r.json()).then(d => {
     if (d.ok) location.reload();
-    else alert(d.error || 'Failed to update question.');
+    else showToast(d.error || 'Failed to update question.', 'error');
   });
 }
 
-function deleteSecurityQuestion(index) {
-  if (!confirm('Delete this security question?')) return;
+async function deleteSecurityQuestion(index) {
+  var ok = await showDialog('Delete Question', 'Delete this security question?', {danger: true, okText: 'Delete'});
+  if (!ok) return;
   fetch('/api/profile/security-questions/delete', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({index: index})
   }).then(r => r.json()).then(d => {
     if (d.ok) location.reload();
-    else alert(d.error || 'Failed to delete question.');
+    else showToast(d.error || 'Failed to delete question.', 'error');
   });
 }
 
@@ -374,7 +375,7 @@ async function executeConfirmAction() {
   if (_confirmAction === 'wipe') {
     const res = await fetch('/api/profile/wipe-data', { method: 'POST' });
     const d = await res.json();
-    if (d.ok) { closeConfirmModal(); alert('All data has been wiped.'); location.reload(); }
+    if (d.ok) { closeConfirmModal(); showToast('All data has been wiped.', 'success'); location.reload(); }
   } else if (_confirmAction === 'delete') {
     const res = await fetch('/api/profile/delete-account', { method: 'POST' });
     const d = await res.json();

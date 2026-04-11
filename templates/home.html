@@ -6,7 +6,9 @@
 <div class="hero-slider" id="heroSlider">
   <div class="hero-slides">
     {% for s in slides %}
-    <div class="hero-slide {{ 'active' if loop.first }}" style="background-image: linear-gradient(180deg, rgba(10,10,14,.3) 0%, rgba(10,10,14,.92) 85%), url('{{ s.images.jpg.large_image_url }}');">
+    <div class="hero-slide {{ 'active' if loop.first }}"
+         data-mal-id="{{ s.mal_id }}"
+         style="background-image: linear-gradient(180deg, rgba(10,10,14,.3) 0%, rgba(10,10,14,.92) 85%), url('{{ s.images.webp.large_image_url or s.images.jpg.large_image_url }}');">
       <div class="hero-slide-content">
         <span class="hero-slide-badge">Trending #{{ loop.index }}</span>
         <h2 class="hero-slide-title">{{ s.title_english or s.title }}</h2>
@@ -25,6 +27,7 @@
     <button class="slider-dot {{ 'active' if loop.first }}" onclick="goToSlide({{ loop.index0 }})" aria-label="Slide {{ loop.index }}"></button>
     {% endfor %}
   </div>
+  <span class="slider-counter" id="sliderCounter">1 / {{ slides|length }}</span>
   <button class="hero-slider-arrow left" onclick="slideHero(-1)" aria-label="Previous">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
   </button>
@@ -45,39 +48,61 @@
 
 <script>
 (function(){
-  var slides = document.querySelectorAll('.hero-slide');
-  var dots = document.querySelectorAll('.slider-dot');
-  if (!slides.length) return;
+  var slideEls = document.querySelectorAll('.hero-slide');
+  var dotEls   = document.querySelectorAll('.slider-dot');
+  var counter  = document.getElementById('sliderCounter');
+  var dotsWrap = document.getElementById('sliderDots');
+  if (!slideEls.length) return;
   var current = 0;
-  var total = slides.length;
+  var total   = slideEls.length;
   var interval;
 
+  function scrollDots(idx) {
+    if (!dotsWrap || !dotEls[idx]) return;
+    var dot  = dotEls[idx];
+    var dotW = dot.offsetWidth + 6;
+    dotsWrap.scrollLeft = Math.max(0, dot.offsetLeft - dotsWrap.offsetWidth / 2 + dot.offsetWidth / 2);
+  }
+
   function show(idx) {
-    slides[current].classList.remove('active');
-    dots[current].classList.remove('active');
+    slideEls[current].classList.remove('active');
+    dotEls[current].classList.remove('active');
     current = ((idx % total) + total) % total;
-    slides[current].classList.add('active');
-    dots[current].classList.add('active');
+    slideEls[current].classList.add('active');
+    dotEls[current].classList.add('active');
+    if (counter) counter.textContent = (current + 1) + ' / ' + total;
+    scrollDots(current);
   }
 
   function startAuto() {
     interval = setInterval(function(){ show(current + 1); }, 5000);
   }
-  function resetAuto() {
-    clearInterval(interval);
-    startAuto();
-  }
+  function resetAuto() { clearInterval(interval); startAuto(); }
 
-  window.slideHero = function(dir) {
-    show(current + dir);
-    resetAuto();
-  };
-  window.goToSlide = function(idx) {
-    show(idx);
-    resetAuto();
-  };
+  window.slideHero = function(dir) { show(current + dir); resetAuto(); };
+  window.goToSlide = function(idx) { show(idx); resetAuto(); };
 
   startAuto();
+
+  /* ── Async upgrade to high-res AniList banner images ── */
+  slideEls.forEach(function(slide) {
+    var malId = slide.dataset.malId;
+    if (!malId) return;
+    fetch('/api/anilist-banner/' + malId)
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || !data.banner) return;
+        var img = new Image();
+        img.onload = function() {
+          slide.style.backgroundImage =
+            "linear-gradient(180deg, rgba(10,10,14,.3) 0%, rgba(10,10,14,.92) 85%), url('" +
+            data.banner + "')";
+          slide.style.backgroundPosition = 'center center';
+        };
+        img.src = data.banner;
+      })
+      .catch(function(){});
+  });
 })();
 </script>
 {% endblock %}

@@ -2,640 +2,326 @@
 {% block title %}Statistics · AniTracker{% endblock %}
 {% block content %}
 
-{% set total_titles = anime_stats.total + manga_stats.total %}
-{% set total_scored = anime_stats.scored_count + manga_stats.scored_count %}
-{% set combined_avg = ((anime_stats.avg_score * anime_stats.scored_count + manga_stats.avg_score * manga_stats.scored_count) / total_scored)|round(1) if total_scored > 0 else 0 %}
-{% set combined_completion = (((anime_stats.by_status.get('Completed',0) + manga_stats.by_status.get('Completed',0)) / total_titles * 100)|round(1)) if total_titles > 0 else 0 %}
-
 <div class="dash">
   <!-- ───── Header ───── -->
   <div class="dash-header">
     <div class="dash-header-left">
-      <h1 class="dash-title">Statistics</h1>
-      <p class="dash-sub">Overview of your anime &amp; manga library</p>
+      <h1 class="dash-title">Your library at a glance</h1>
+      <p class="dash-sub">Lifetime stats across anime &amp; manga</p>
     </div>
   </div>
 
-  <!-- ───── Tab Bar ───── -->
-  <div class="dash-tabs">
-    <button class="dash-tab active" data-tab="overview">Overview</button>
-    <button class="dash-tab" data-tab="anime">Anime</button>
-    <button class="dash-tab" data-tab="manga">Manga</button>
+  <!-- ═══════ SUMMARY CARDS ═══════ -->
+  <div class="dash-summary four">
+    <div class="summary-card">
+      <span class="summary-label">Total titles</span>
+      <span class="summary-value">{{ "{:,}".format(total_titles) }}</span>
+    </div>
+    <div class="summary-card">
+      <span class="summary-label">Episodes watched</span>
+      <span class="summary-value">{{ "{:,}".format(total_episodes) }}</span>
+    </div>
+    <div class="summary-card">
+      <span class="summary-label">Chapters read</span>
+      <span class="summary-value">{{ "{:,}".format(total_chapters) }}</span>
+    </div>
+    <div class="summary-card">
+      <span class="summary-label">Days watched</span>
+      <span class="summary-value">{{ days_watched }}</span>
+    </div>
   </div>
 
-  <!-- ═══════ OVERVIEW TAB ═══════ -->
-  <div class="dash-panel" id="tab-overview">
-    <!-- Summary row -->
-    <div class="dash-summary">
-      <div class="summary-card">
-        <span class="summary-label">Total Titles</span>
-        <span class="summary-value">{{ total_titles }}</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Episodes Watched</span>
-        <span class="summary-value">{{ anime_stats.total_episodes }}</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Chapters Read</span>
-        <span class="summary-value">{{ manga_stats.total_chapters }}</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Average Score</span>
-        <span class="summary-value">{{ combined_avg or '—' }}</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Completion Rate</span>
-        <span class="summary-value">{{ combined_completion }}%</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Est. Watch Time</span>
-        <span class="summary-value">{{ anime_stats.est_days }}<small class="summary-unit">days</small></span>
-      </div>
+  <div class="dash-summary two">
+    <div class="summary-card">
+      <span class="summary-label">Mean score</span>
+      <span class="summary-value">{{ mean_score }}</span>
     </div>
-
-    <!-- Dual pie row: Anime vs Manga status -->
-    <div class="dash-row">
-      <!-- Anime pie -->
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Anime by Status</h3>
-          <span class="dash-card-badge">{{ anime_stats.total }} total</span>
-        </div>
-        <div class="pie-area">
-          {% set atotal = anime_stats.total or 1 %}
-          <div class="donut-chart" style="background: conic-gradient(
-            {% set ns = namespace(offset=0) %}
-            {% for s in anime_statuses %}
-              {{ status_colors.get(s, '#888') }} {{ ns.offset }}deg {{ ns.offset + (anime_stats.by_status.get(s, 0) / atotal * 360) }}deg
-              {% set ns.offset = ns.offset + (anime_stats.by_status.get(s, 0) / atotal * 360) %}
-              {% if not loop.last %},{% endif %}
-            {% endfor %}
-          );">
-            <div class="donut-hole">
-              <span class="donut-number">{{ anime_stats.total }}</span>
-              <span class="donut-label">Total</span>
-            </div>
-          </div>
-          <div class="chart-legend">
-            {% for s in anime_statuses %}
-            {% set cnt = anime_stats.by_status.get(s, 0) %}
-            <div class="legend-item">
-              <span class="legend-dot" style="background: {{ status_colors.get(s, '#888') }}"></span>
-              <span class="legend-name">{{ s }}</span>
-              <span class="legend-pct">{{ ((cnt / atotal) * 100)|round(1) }}%</span>
-              <span class="legend-count">{{ cnt }}</span>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-      </div>
-
-      <!-- Manga pie -->
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Manga by Status</h3>
-          <span class="dash-card-badge">{{ manga_stats.total }} total</span>
-        </div>
-        <div class="pie-area">
-          {% set mtotal = manga_stats.total or 1 %}
-          <div class="donut-chart" style="background: conic-gradient(
-            {% set ns = namespace(offset=0) %}
-            {% for s in manga_statuses %}
-              {{ status_colors.get(s, '#888') }} {{ ns.offset }}deg {{ ns.offset + (manga_stats.by_status.get(s, 0) / mtotal * 360) }}deg
-              {% set ns.offset = ns.offset + (manga_stats.by_status.get(s, 0) / mtotal * 360) %}
-              {% if not loop.last %},{% endif %}
-            {% endfor %}
-          );">
-            <div class="donut-hole">
-              <span class="donut-number">{{ manga_stats.total }}</span>
-              <span class="donut-label">Total</span>
-            </div>
-          </div>
-          <div class="chart-legend">
-            {% for s in manga_statuses %}
-            {% set cnt = manga_stats.by_status.get(s, 0) %}
-            <div class="legend-item">
-              <span class="legend-dot" style="background: {{ status_colors.get(s, '#888') }}"></span>
-              <span class="legend-name">{{ s }}</span>
-              <span class="legend-pct">{{ ((cnt / mtotal) * 100)|round(1) }}%</span>
-              <span class="legend-count">{{ cnt }}</span>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-      </div>
+    <div class="summary-card">
+      <span class="summary-label">Completion rate</span>
+      <span class="summary-value">{{ completion_rate }}%</span>
     </div>
+  </div>
 
-    <!-- Library Composition + Activity Timeline -->
-    <div class="dash-row">
-      <!-- Library composition donut (interactive) -->
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Library Composition</h3>
-          <span class="dash-card-badge">{{ total_titles }} titles</span>
-        </div>
-        <div class="pie-area">
-          {% set comp_total = total_titles or 1 %}
-          {% set anime_pct_val = ((anime_stats.total / comp_total) * 100)|round(1) %}
-          {% set manga_pct_val = ((manga_stats.total / comp_total) * 100)|round(1) %}
-          <div class="interactive-donut" id="libDonut">
-            <svg viewBox="0 0 200 200" class="donut-svg">
-              {% set anime_frac = anime_stats.total / comp_total %}
-              {% set manga_frac = manga_stats.total / comp_total %}
-              {% set circumference = 502.65 %}
-              <!-- Anime arc -->
-              <circle class="donut-segment" id="seg-anime"
-                cx="100" cy="100" r="80"
-                stroke="var(--accent)" stroke-width="28" fill="none"
-                stroke-dasharray="{{ (anime_frac * circumference)|round(2) }} {{ circumference }}"
-                stroke-dashoffset="0"
-                transform="rotate(-90 100 100)"
-                data-label="Anime" data-count="{{ anime_stats.total }}" data-pct="{{ anime_pct_val }}"
-              />
-              <!-- Manga arc -->
-              <circle class="donut-segment" id="seg-manga"
-                cx="100" cy="100" r="80"
-                stroke="var(--accent-2)" stroke-width="28" fill="none"
-                stroke-dasharray="{{ (manga_frac * circumference)|round(2) }} {{ circumference }}"
-                stroke-dashoffset="-{{ (anime_frac * circumference)|round(2) }}"
-                transform="rotate(-90 100 100)"
-                data-label="Manga" data-count="{{ manga_stats.total }}" data-pct="{{ manga_pct_val }}"
-              />
-            </svg>
-            <div class="donut-center" id="donutCenter">
-              <span class="donut-number" id="donutNumber">{{ total_titles }}</span>
-              <span class="donut-label" id="donutLabel">Total</span>
-            </div>
-            <div class="donut-tooltip" id="donutTooltip"></div>
-          </div>
-          <div class="chart-legend">
-            <div class="legend-item legend-interactive" data-segment="seg-anime">
-              <span class="legend-dot" style="background: var(--accent)"></span>
-              <span class="legend-name">Anime</span>
-              <span class="legend-pct">{{ anime_pct_val }}%</span>
-              <span class="legend-count">{{ anime_stats.total }}</span>
-            </div>
-            <div class="legend-item legend-interactive" data-segment="seg-manga">
-              <span class="legend-dot" style="background: var(--accent-2)"></span>
-              <span class="legend-name">Manga</span>
-              <span class="legend-pct">{{ manga_pct_val }}%</span>
-              <span class="legend-count">{{ manga_stats.total }}</span>
-            </div>
-          </div>
-        </div>
+  <!-- ═══════ GENRE DISTRIBUTION + SCORE DISTRIBUTION ═══════ -->
+  <div class="dash-row">
+    <!-- Genre distribution donut -->
+    <div class="dash-card">
+      <div class="dash-card-head">
+        <h3>Genre distribution</h3>
       </div>
-
-      <!-- Activity Timeline (last 12 months) -->
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Activity Timeline</h3>
-          <span class="dash-card-badge">Last 12 months</span>
+      <p class="card-hint">Click a slice to filter</p>
+      {% if genre_labels %}
+      <div class="pie-area">
+        <div class="donut-chart" id="genreDonut" style="background: conic-gradient(
+          {% set ns = namespace(offset=0) %}
+          {% for i in range(genre_labels|length) %}
+            {{ genre_colors[i] }} {{ ns.offset }}deg {{ ns.offset + (genre_values[i] / genre_total * 360) }}deg
+            {% set ns.offset = ns.offset + (genre_values[i] / genre_total * 360) %}
+            {% if not loop.last %},{% endif %}
+          {% endfor %}
+        );">
+          <div class="donut-hole"></div>
         </div>
-        <div class="timeline-chart" id="timeline-overview">
-          {% set act_vals = combined_activity.values()|list %}
-          {% set act_max = act_vals|max if act_vals|length > 0 and act_vals|max > 0 else 1 %}
-          {% for month, count in combined_activity.items() %}
-          <div class="timeline-bar-wrap" title="{{ month }}: {{ count }} titles">
-            <div class="timeline-bar" style="height: {{ (count / act_max * 100)|round }}%;"></div>
-            <span class="timeline-label">{{ month[-2:] }}</span>
+        <div class="chart-legend">
+          {% for i in range(genre_labels|length) %}
+          <div class="legend-item">
+            <span class="legend-dot" style="background: {{ genre_colors[i] }}"></span>
+            <span class="legend-name">{{ genre_labels[i] }}</span>
           </div>
           {% endfor %}
         </div>
+      </div>
+      {% else %}
+      <p class="no-data">Add titles to your library and re-save them to populate genre data.</p>
+      {% endif %}
+    </div>
+
+    <!-- Score distribution bars (vertical) -->
+    <div class="dash-card">
+      <div class="dash-card-head">
+        <h3>Score distribution</h3>
+      </div>
+      <p class="card-hint">How you rate titles 1–10</p>
+      <div class="vbar-chart" id="scoreChart">
+        {% set max_sc = score_dist.values()|max if score_dist.values()|max > 0 else 1 %}
+        {% for i in range(1, 11) %}
+        {% set cnt = score_dist.get(i|string, 0) %}
+        <div class="vbar-col">
+          <span class="vbar-val">{{ cnt }}</span>
+          <div class="vbar-track">
+            <div class="vbar-fill" style="height: {{ (cnt / max_sc * 100)|round }}%;"></div>
+          </div>
+          <span class="vbar-label">{{ i }}</span>
+        </div>
+        {% endfor %}
       </div>
     </div>
   </div>
 
-  <!-- ═══════ ANIME TAB ═══════ -->
-  <div class="dash-panel hidden" id="tab-anime">
-    <!-- Summary row -->
-    <div class="dash-summary">
-      <div class="summary-card">
-        <span class="summary-label">Total Anime</span>
-        <span class="summary-value">{{ anime_stats.total }}</span>
+  <!-- ═══════ WATCH ACTIVITY + TASTE PROFILE ═══════ -->
+  <div class="dash-row">
+    <!-- Watch activity (12 months) dual line chart -->
+    <div class="dash-card">
+      <div class="dash-card-head">
+        <h3>Watch activity (12mo)</h3>
       </div>
-      <div class="summary-card">
-        <span class="summary-label">Episodes Watched</span>
-        <span class="summary-value">{{ anime_stats.total_episodes }}</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Avg Score</span>
-        <span class="summary-value">{{ anime_stats.avg_score or '—' }}</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Completion Rate</span>
-        <span class="summary-value">{{ anime_stats.completion_rate }}%</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Drop Rate</span>
-        <span class="summary-value">{{ anime_stats.drop_rate }}%</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Est. Watch Time</span>
-        <span class="summary-value">{{ anime_stats.est_days }}<small class="summary-unit">days</small></span>
+      <p class="card-hint">Episodes vs chapters</p>
+      <canvas id="activityChart" height="220"></canvas>
+      <div class="chart-legend-inline">
+        <span class="legend-inline"><span class="legend-line" style="background: #3b82f6;"></span> Episodes</span>
+        <span class="legend-inline"><span class="legend-line dashed" style="background: #34d399;"></span> Chapters</span>
       </div>
     </div>
 
-    <div class="dash-row">
-      <!-- Status donut -->
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Status Breakdown</h3>
-          <span class="dash-card-badge">{{ anime_stats.total }} total</span>
-        </div>
-        <div class="pie-area">
-          {% set atotal = anime_stats.total or 1 %}
-          <div class="donut-chart" style="background: conic-gradient(
-            {% set ns = namespace(offset=0) %}
-            {% for s in anime_statuses %}
-              {{ status_colors.get(s, '#888') }} {{ ns.offset }}deg {{ ns.offset + (anime_stats.by_status.get(s, 0) / atotal * 360) }}deg
-              {% set ns.offset = ns.offset + (anime_stats.by_status.get(s, 0) / atotal * 360) %}
-              {% if not loop.last %},{% endif %}
-            {% endfor %}
-          );">
-            <div class="donut-hole">
-              <span class="donut-number">{{ anime_stats.total }}</span>
-              <span class="donut-label">Total</span>
-            </div>
-          </div>
-          <div class="chart-legend">
-            {% for s in anime_statuses %}
-            {% set cnt = anime_stats.by_status.get(s, 0) %}
-            <div class="legend-item">
-              <span class="legend-dot" style="background: {{ status_colors.get(s, '#888') }}"></span>
-              <span class="legend-name">{{ s }}</span>
-              <span class="legend-pct">{{ ((cnt / atotal) * 100)|round(1) }}%</span>
-              <span class="legend-count">{{ cnt }}</span>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
+    <!-- Taste profile (radar chart) -->
+    <div class="dash-card">
+      <div class="dash-card-head">
+        <h3>Taste profile</h3>
       </div>
-
-      <!-- Score distribution -->
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Score Distribution</h3>
-          <span class="dash-card-badge">Median {{ anime_stats.score_median }} · Mode {{ anime_stats.score_mode }}</span>
-        </div>
-        <div class="bar-chart">
-          {% set max_score_count = anime_stats.score_distribution.values()|max if anime_stats.scored_count > 0 else 1 %}
-          {% for i in range(10, 0, -1) %}
-          {% set count = anime_stats.score_distribution.get(i|string, 0) %}
-          <div class="bar-row">
-            <span class="bar-label">{{ i }}</span>
-            <div class="bar-track">
-              <div class="bar-fill" style="width: {{ (count / (max_score_count or 1) * 100)|round }}%; background: var(--accent);"></div>
-            </div>
-            <span class="bar-count">{{ count }}</span>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
+      <p class="card-hint">Avg rating by genre</p>
+      {% if taste_labels %}
+      <canvas id="radarChart" height="260"></canvas>
+      {% else %}
+      <p class="no-data">Genre data needed. Re-save library entries to populate.</p>
+      {% endif %}
     </div>
+  </div>
 
-    <!-- Progress + Top Scored row -->
-    <div class="dash-row">
-      <!-- Progress Completion donut -->
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Progress Completion</h3>
-          <span class="dash-card-badge">{{ anime_stats.total }} titles</span>
-        </div>
-        <div class="pie-area">
-          {% set pb = anime_stats.progress_buckets %}
-          {% set pb_total = anime_stats.total or 1 %}
-          {% set deg_done = (pb.complete / pb_total * 360) %}
-          {% set deg_prog = (pb.in_progress / pb_total * 360) %}
-          {% set deg_none = (pb.not_started / pb_total * 360) %}
-          <div class="donut-chart" style="background: conic-gradient(
-            #22c55e 0deg {{ deg_done }}deg,
-            #3b82f6 {{ deg_done }}deg {{ deg_done + deg_prog }}deg,
-            #6b7280 {{ deg_done + deg_prog }}deg {{ deg_done + deg_prog + deg_none }}deg
-          );">
-            <div class="donut-hole">
-              <span class="donut-number">{{ pb.complete }}</span>
-              <span class="donut-label">Done</span>
-            </div>
-          </div>
-          <div class="chart-legend">
-            <div class="legend-item">
-              <span class="legend-dot" style="background: #22c55e"></span>
-              <span class="legend-name">Fully Watched</span>
-              <span class="legend-pct">{{ ((pb.complete / pb_total) * 100)|round(1) }}%</span>
-              <span class="legend-count">{{ pb.complete }}</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-dot" style="background: #3b82f6"></span>
-              <span class="legend-name">In Progress</span>
-              <span class="legend-pct">{{ ((pb.in_progress / pb_total) * 100)|round(1) }}%</span>
-              <span class="legend-count">{{ pb.in_progress }}</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-dot" style="background: #6b7280"></span>
-              <span class="legend-name">Not Started</span>
-              <span class="legend-pct">{{ ((pb.not_started / pb_total) * 100)|round(1) }}%</span>
-              <span class="legend-count">{{ pb.not_started }}</span>
-            </div>
-          </div>
-        </div>
+  <!-- ═══════ ADVANCED METRICS ═══════ -->
+  <div class="dash-card advanced-metrics">
+    <h3>Advanced metrics</h3>
+    <div class="metrics-grid">
+      <div class="metric-item">
+        <span class="metric-label">Score deviation</span>
+        <span class="metric-value">{{ "+" if score_deviation >= 0 }}{{ score_deviation }} vs global</span>
       </div>
-
-      <!-- Top Scored -->
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Top Scored Anime</h3>
-          <span class="dash-card-badge">Best of {{ anime_stats.scored_count }}</span>
-        </div>
-        {% if anime_stats.top_scored %}
-        <div class="top-list">
-          {% for t in anime_stats.top_scored %}
-          <div class="top-item">
-            <span class="top-rank">#{{ loop.index }}</span>
-            {% if t.cover_url %}
-            <img class="top-cover" src="{{ t.cover_url }}" alt="">
-            {% else %}
-            <div class="top-cover-placeholder">?</div>
-            {% endif %}
-            <span class="top-title">{{ t.title }}</span>
-            <span class="top-score">★ {{ t.score }}</span>
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <p class="no-data">No scored anime yet.</p>
-        {% endif %}
+      <div class="metric-item">
+        <span class="metric-label">Mainstream index</span>
+        <span class="metric-value">{{ mainstream_idx }} / 100</span>
       </div>
-    </div>
-
-    <!-- Activity Timeline -->
-    <div class="dash-row" style="grid-template-columns: 1fr;">
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Anime Added Over Time</h3>
-          <span class="dash-card-badge">Last 12 months</span>
-        </div>
-        <div class="timeline-chart">
-          {% set a_vals = anime_stats.activity_by_month.values()|list %}
-          {% set a_max = a_vals|max if a_vals|length > 0 and a_vals|max > 0 else 1 %}
-          {% for month, count in anime_stats.activity_by_month.items() %}
-          <div class="timeline-bar-wrap" title="{{ month }}: {{ count }} anime">
-            <div class="timeline-bar" style="height: {{ (count / a_max * 100)|round }}%; background: var(--accent);"></div>
-            <span class="timeline-label">{{ month[-2:] }}</span>
-          </div>
-          {% endfor %}
-        </div>
+      <div class="metric-item">
+        <span class="metric-label">Drop rate</span>
+        <span class="metric-value">{{ drop_rate }}%</span>
+      </div>
+      <div class="metric-item">
+        <span class="metric-label">Avg ep length</span>
+        <span class="metric-value">{{ avg_ep_length }} min</span>
+      </div>
+      <div class="metric-item">
+        <span class="metric-label">Bingeability</span>
+        <span class="metric-value">{{ binge_score }} ep/session</span>
+      </div>
+      <div class="metric-item">
+        <span class="metric-label">Top studio</span>
+        <span class="metric-value">{{ top_studio_name }}{% if top_studio_count %} ({{ top_studio_count }}){% endif %}</span>
       </div>
     </div>
   </div>
 
-  <!-- ═══════ MANGA TAB ═══════ -->
-  <div class="dash-panel hidden" id="tab-manga">
-    <!-- Summary row -->
-    <div class="dash-summary">
-      <div class="summary-card">
-        <span class="summary-label">Total Manga</span>
-        <span class="summary-value">{{ manga_stats.total }}</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Chapters Read</span>
-        <span class="summary-value">{{ manga_stats.total_chapters }}</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Avg Score</span>
-        <span class="summary-value">{{ manga_stats.avg_score or '—' }}</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Completion Rate</span>
-        <span class="summary-value">{{ manga_stats.completion_rate }}%</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Drop Rate</span>
-        <span class="summary-value">{{ manga_stats.drop_rate }}%</span>
-      </div>
-      <div class="summary-card">
-        <span class="summary-label">Est. Read Time</span>
-        <span class="summary-value">{{ manga_stats.est_hours }}<small class="summary-unit">hrs</small></span>
-      </div>
-    </div>
-
-    <div class="dash-row">
-      <!-- Status donut -->
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Status Breakdown</h3>
-          <span class="dash-card-badge">{{ manga_stats.total }} total</span>
-        </div>
-        <div class="pie-area">
-          {% set mtotal = manga_stats.total or 1 %}
-          <div class="donut-chart" style="background: conic-gradient(
-            {% set ns = namespace(offset=0) %}
-            {% for s in manga_statuses %}
-              {{ status_colors.get(s, '#888') }} {{ ns.offset }}deg {{ ns.offset + (manga_stats.by_status.get(s, 0) / mtotal * 360) }}deg
-              {% set ns.offset = ns.offset + (manga_stats.by_status.get(s, 0) / mtotal * 360) %}
-              {% if not loop.last %},{% endif %}
-            {% endfor %}
-          );">
-            <div class="donut-hole">
-              <span class="donut-number">{{ manga_stats.total }}</span>
-              <span class="donut-label">Total</span>
-            </div>
-          </div>
-          <div class="chart-legend">
-            {% for s in manga_statuses %}
-            {% set cnt = manga_stats.by_status.get(s, 0) %}
-            <div class="legend-item">
-              <span class="legend-dot" style="background: {{ status_colors.get(s, '#888') }}"></span>
-              <span class="legend-name">{{ s }}</span>
-              <span class="legend-pct">{{ ((cnt / mtotal) * 100)|round(1) }}%</span>
-              <span class="legend-count">{{ cnt }}</span>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-      </div>
-
-      <!-- Score distribution -->
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Score Distribution</h3>
-          <span class="dash-card-badge">Median {{ manga_stats.score_median }} · Mode {{ manga_stats.score_mode }}</span>
-        </div>
-        <div class="bar-chart">
-          {% set max_score_count_m = manga_stats.score_distribution.values()|max if manga_stats.scored_count > 0 else 1 %}
-          {% for i in range(10, 0, -1) %}
-          {% set count = manga_stats.score_distribution.get(i|string, 0) %}
-          <div class="bar-row">
-            <span class="bar-label">{{ i }}</span>
-            <div class="bar-track">
-              <div class="bar-fill" style="width: {{ (count / (max_score_count_m or 1) * 100)|round }}%; background: var(--accent-2);"></div>
-            </div>
-            <span class="bar-count">{{ count }}</span>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-
-    <!-- Progress + Top Scored row -->
-    <div class="dash-row">
-      <!-- Progress Completion donut -->
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Progress Completion</h3>
-          <span class="dash-card-badge">{{ manga_stats.total }} titles</span>
-        </div>
-        <div class="pie-area">
-          {% set mpb = manga_stats.progress_buckets %}
-          {% set mpb_total = manga_stats.total or 1 %}
-          {% set mdeg_done = (mpb.complete / mpb_total * 360) %}
-          {% set mdeg_prog = (mpb.in_progress / mpb_total * 360) %}
-          {% set mdeg_none = (mpb.not_started / mpb_total * 360) %}
-          <div class="donut-chart" style="background: conic-gradient(
-            #22c55e 0deg {{ mdeg_done }}deg,
-            #3b82f6 {{ mdeg_done }}deg {{ mdeg_done + mdeg_prog }}deg,
-            #6b7280 {{ mdeg_done + mdeg_prog }}deg {{ mdeg_done + mdeg_prog + mdeg_none }}deg
-          );">
-            <div class="donut-hole">
-              <span class="donut-number">{{ mpb.complete }}</span>
-              <span class="donut-label">Done</span>
-            </div>
-          </div>
-          <div class="chart-legend">
-            <div class="legend-item">
-              <span class="legend-dot" style="background: #22c55e"></span>
-              <span class="legend-name">Fully Read</span>
-              <span class="legend-pct">{{ ((mpb.complete / mpb_total) * 100)|round(1) }}%</span>
-              <span class="legend-count">{{ mpb.complete }}</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-dot" style="background: #3b82f6"></span>
-              <span class="legend-name">In Progress</span>
-              <span class="legend-pct">{{ ((mpb.in_progress / mpb_total) * 100)|round(1) }}%</span>
-              <span class="legend-count">{{ mpb.in_progress }}</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-dot" style="background: #6b7280"></span>
-              <span class="legend-name">Not Started</span>
-              <span class="legend-pct">{{ ((mpb.not_started / mpb_total) * 100)|round(1) }}%</span>
-              <span class="legend-count">{{ mpb.not_started }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Top Scored -->
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Top Scored Manga</h3>
-          <span class="dash-card-badge">Best of {{ manga_stats.scored_count }}</span>
-        </div>
-        {% if manga_stats.top_scored %}
-        <div class="top-list">
-          {% for t in manga_stats.top_scored %}
-          <div class="top-item">
-            <span class="top-rank">#{{ loop.index }}</span>
-            {% if t.cover_url %}
-            <img class="top-cover" src="{{ t.cover_url }}" alt="">
-            {% else %}
-            <div class="top-cover-placeholder">?</div>
-            {% endif %}
-            <span class="top-title">{{ t.title }}</span>
-            <span class="top-score">★ {{ t.score }}</span>
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <p class="no-data">No scored manga yet.</p>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Activity Timeline -->
-    <div class="dash-row" style="grid-template-columns: 1fr;">
-      <div class="dash-card">
-        <div class="dash-card-head">
-          <h3>Manga Added Over Time</h3>
-          <span class="dash-card-badge">Last 12 months</span>
-        </div>
-        <div class="timeline-chart">
-          {% set m_vals = manga_stats.activity_by_month.values()|list %}
-          {% set m_max = m_vals|max if m_vals|length > 0 and m_vals|max > 0 else 1 %}
-          {% for month, count in manga_stats.activity_by_month.items() %}
-          <div class="timeline-bar-wrap" title="{{ month }}: {{ count }} manga">
-            <div class="timeline-bar" style="height: {{ (count / m_max * 100)|round }}%; background: var(--accent-2);"></div>
-            <span class="timeline-label">{{ month[-2:] }}</span>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-  </div>
+  {% if genres_available < total_titles %}
+  <p class="genre-note">Genre data loaded for {{ genres_available }} of {{ total_titles }} titles. Visit and re-save entries to enrich data, or refresh this page to backfill more.</p>
+  {% endif %}
 </div>
 
 <script>
 (function(){
-  /* Tab switching */
-  const tabs = document.querySelectorAll('.dash-tab');
-  tabs.forEach(t => t.addEventListener('click', () => {
-    tabs.forEach(b => b.classList.remove('active'));
-    t.classList.add('active');
-    document.querySelectorAll('.dash-panel').forEach(p => p.classList.add('hidden'));
-    document.getElementById('tab-' + t.dataset.tab).classList.remove('hidden');
-  }));
+  /* ── Activity line chart (Canvas) ── */
+  var canvas = document.getElementById('activityChart');
+  if (canvas) {
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width = canvas.parentElement.clientWidth - 48;
+    var H = canvas.height = 200;
+    var labels = {{ month_labels|tojson }};
+    var ep = {{ anime_activity|tojson }};
+    var ch = {{ manga_activity|tojson }};
+    var maxVal = Math.max(1, Math.max.apply(null, ep.concat(ch)));
+    var padL = 36, padR = 10, padT = 16, padB = 28;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
 
-  /* Interactive Library Composition Donut */
-  var segments = document.querySelectorAll('.donut-segment');
-  var centerNum = document.getElementById('donutNumber');
-  var centerLabel = document.getElementById('donutLabel');
-  var tooltip = document.getElementById('donutTooltip');
-  var defaultNum = centerNum ? centerNum.textContent : '';
-  var defaultLabel = centerLabel ? centerLabel.textContent : '';
+    function xp(i) { return padL + (i / (labels.length - 1)) * plotW; }
+    function yp(v) { return padT + plotH - (v / maxVal) * plotH; }
 
-  segments.forEach(function(seg) {
-    seg.addEventListener('mouseenter', function() {
-      var label = seg.dataset.label;
-      var count = seg.dataset.count;
-      var pct = seg.dataset.pct;
-      if (centerNum) centerNum.textContent = count;
-      if (centerLabel) centerLabel.textContent = label;
-      seg.style.strokeWidth = '34';
-      seg.style.filter = 'brightness(1.3) drop-shadow(0 0 8px rgba(255,255,255,.2))';
-    });
-    seg.addEventListener('mouseleave', function() {
-      if (centerNum) centerNum.textContent = defaultNum;
-      if (centerLabel) centerLabel.textContent = defaultLabel;
-      seg.style.strokeWidth = '28';
-      seg.style.filter = '';
-    });
-    seg.addEventListener('mousemove', function(e) {
-      if (tooltip) {
-        tooltip.textContent = seg.dataset.label + ': ' + seg.dataset.count + ' (' + seg.dataset.pct + '%)';
-        tooltip.style.display = 'block';
-        var rect = seg.closest('.interactive-donut').getBoundingClientRect();
-        tooltip.style.left = (e.clientX - rect.left + 10) + 'px';
-        tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
+    /* grid lines */
+    ctx.strokeStyle = 'rgba(255,255,255,.08)';
+    ctx.lineWidth = 1;
+    for (var g = 0; g <= 5; g++) {
+      var gy = padT + (g / 5) * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(W - padR, gy); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,.35)';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(Math.round(maxVal - (g / 5) * maxVal), padL - 6, gy + 4);
+    }
+
+    /* x labels */
+    ctx.fillStyle = 'rgba(255,255,255,.45)';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    for (var j = 0; j < labels.length; j++) {
+      ctx.fillText(labels[j], xp(j), H - 6);
+    }
+
+    /* episodes line (solid blue) */
+    ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i < ep.length; i++) {
+      if (i === 0) ctx.moveTo(xp(i), yp(ep[i]));
+      else ctx.lineTo(xp(i), yp(ep[i]));
+    }
+    ctx.stroke();
+
+    /* chapters line (dashed green) */
+    ctx.strokeStyle = '#34d399'; ctx.lineWidth = 2.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    for (var i = 0; i < ch.length; i++) {
+      if (i === 0) ctx.moveTo(xp(i), yp(ch[i]));
+      else ctx.lineTo(xp(i), yp(ch[i]));
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    /* dots */
+    function dots(arr, color) {
+      ctx.fillStyle = color;
+      for (var i = 0; i < arr.length; i++) {
+        ctx.beginPath(); ctx.arc(xp(i), yp(arr[i]), 4, 0, 6.28); ctx.fill();
       }
-    });
-    seg.addEventListener('mouseout', function() {
-      if (tooltip) tooltip.style.display = 'none';
-    });
-  });
+    }
+    dots(ep, '#3b82f6');
+    dots(ch, '#34d399');
+  }
 
-  /* Legend hover syncs with donut */
-  document.querySelectorAll('.legend-interactive').forEach(function(item) {
-    var segId = item.dataset.segment;
-    var seg = document.getElementById(segId);
-    if (!seg) return;
-    item.addEventListener('mouseenter', function() {
-      seg.dispatchEvent(new Event('mouseenter'));
-      item.style.background = 'var(--panel-2)';
-    });
-    item.addEventListener('mouseleave', function() {
-      seg.dispatchEvent(new Event('mouseleave'));
-      item.style.background = '';
-      if (tooltip) tooltip.style.display = 'none';
-    });
-  });
+  /* ── Radar / taste profile chart (Canvas) ── */
+  var radar = document.getElementById('radarChart');
+  if (radar) {
+    var rc = radar.getContext('2d');
+    var rLabels = {{ taste_labels|tojson }};
+    var rValues = {{ taste_values|tojson }};
+    if (rLabels.length >= 3) {
+      var rW = radar.width = radar.parentElement.clientWidth - 48;
+      var rH = radar.height = 240;
+      var cx = rW / 2, cy = rH / 2 + 4;
+      var radius = Math.min(cx, cy) - 40;
+      var n = rLabels.length;
+      var maxR = 10;
+      var step = (2 * Math.PI) / n;
+
+      /* grid rings */
+      for (var ring = 1; ring <= 5; ring++) {
+        var rr = radius * (ring / 5);
+        rc.strokeStyle = 'rgba(255,255,255,.08)';
+        rc.lineWidth = 1;
+        rc.beginPath();
+        for (var k = 0; k < n; k++) {
+          var a = -Math.PI / 2 + k * step;
+          var px = cx + rr * Math.cos(a);
+          var py = cy + rr * Math.sin(a);
+          if (k === 0) rc.moveTo(px, py);
+          else rc.lineTo(px, py);
+        }
+        rc.closePath(); rc.stroke();
+        /* ring label */
+        rc.fillStyle = 'rgba(255,255,255,.25)';
+        rc.font = '9px sans-serif';
+        rc.textAlign = 'center';
+        rc.fillText(Math.round(maxR * ring / 5), cx + 2, cy - rr + 12);
+      }
+
+      /* axis lines */
+      rc.strokeStyle = 'rgba(255,255,255,.1)'; rc.lineWidth = 1;
+      for (var k = 0; k < n; k++) {
+        var a = -Math.PI / 2 + k * step;
+        rc.beginPath(); rc.moveTo(cx, cy);
+        rc.lineTo(cx + radius * Math.cos(a), cy + radius * Math.sin(a));
+        rc.stroke();
+      }
+
+      /* data polygon */
+      rc.fillStyle = 'rgba(249,115,22,.18)';
+      rc.strokeStyle = '#f97316'; rc.lineWidth = 2.5;
+      rc.beginPath();
+      for (var k = 0; k < n; k++) {
+        var a = -Math.PI / 2 + k * step;
+        var vr = (rValues[k] / maxR) * radius;
+        var px = cx + vr * Math.cos(a);
+        var py = cy + vr * Math.sin(a);
+        if (k === 0) rc.moveTo(px, py);
+        else rc.lineTo(px, py);
+      }
+      rc.closePath(); rc.fill(); rc.stroke();
+
+      /* data dots + values */
+      rc.fillStyle = '#f97316';
+      for (var k = 0; k < n; k++) {
+        var a = -Math.PI / 2 + k * step;
+        var vr = (rValues[k] / maxR) * radius;
+        var px = cx + vr * Math.cos(a);
+        var py = cy + vr * Math.sin(a);
+        rc.beginPath(); rc.arc(px, py, 4, 0, 6.28); rc.fill();
+        /* value label on dot */
+        rc.fillStyle = 'rgba(255,255,255,.85)';
+        rc.font = 'bold 10px sans-serif';
+        rc.textAlign = 'center';
+        rc.fillText(rValues[k], px, py - 8);
+        rc.fillStyle = '#f97316';
+      }
+
+      /* axis labels */
+      rc.fillStyle = 'rgba(255,255,255,.7)';
+      rc.font = '12px sans-serif';
+      for (var k = 0; k < n; k++) {
+        var a = -Math.PI / 2 + k * step;
+        var lx = cx + (radius + 24) * Math.cos(a);
+        var ly = cy + (radius + 24) * Math.sin(a);
+        rc.textAlign = 'center';
+        if (Math.cos(a) > 0.3) rc.textAlign = 'left';
+        else if (Math.cos(a) < -0.3) rc.textAlign = 'right';
+        rc.fillText(rLabels[k], lx, ly + 4);
+      }
+    }
+  }
 })();
 </script>
 

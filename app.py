@@ -198,7 +198,7 @@ def logout():
 @app.route("/")
 @login_required
 def home():
-    slides = api.get_top_rated_carousel("anime", limit=6)
+    slides = api.get_top_rated_carousel("anime", limit=25)
     return render_template("home.html", slides=slides)
 
 
@@ -386,6 +386,8 @@ def api_save_anime():
         title_english=p.get("title_english") or None,
         title_japanese=p.get("title_japanese") or None,
         notes=p.get("notes") if "notes" in p else None,
+        genres=p.get("genres") or None,
+        studios=p.get("studios") or None,
     )
     return jsonify(ok=True)
 
@@ -410,6 +412,7 @@ def api_save_manga():
         title_english=p.get("title_english") or None,
         title_japanese=p.get("title_japanese") or None,
         notes=p.get("notes") if "notes" in p else None,
+        genres=p.get("genres") or None,
     )
     return jsonify(ok=True)
 
@@ -440,6 +443,14 @@ def api_carousel(kind):
         return jsonify(error=str(e)), 500
 
 
+@app.get("/api/anilist-banner/<int:mal_id>")
+@login_required
+def api_anilist_banner(mal_id):
+    """Return the AniList banner image URL for a given MAL id."""
+    extras = api.anilist_extras(int(mal_id), "ANIME")
+    return jsonify({"banner": extras.get("banner") or ""})
+
+
 # ------------------------------------------------------------------
 # STATISTICS
 # ------------------------------------------------------------------
@@ -448,121 +459,189 @@ def api_carousel(kind):
 def statistics():
     from collections import Counter
     from statistics import median as _median
+    from datetime import datetime, timedelta
+    import math
 
     anime_items = db.list_anime(current_user.id)
     manga_items = db.list_manga(current_user.id)
+    all_items   = anime_items + manga_items
 
-    # ── helper: build stats dict for a list ──
-    def _build_stats(items, statuses, kind):
-        total = len(items)
-        scored = [i["score"] for i in items if i.get("score")]
-        avg = round(sum(scored) / len(scored), 1) if scored else 0
-        score_dist = {str(s): 0 for s in range(1, 11)}
-        for sc in scored:
-            score_dist[str(sc)] += 1
+    total_titles = len(all_items)
 
-        by_status = {}
-        for s in statuses:
-            by_status[s] = len([i for i in items if i["status"] == s])
+    # ── lazy backfill genres for entries missing them (max 15 per load) ──
+    backfilled = 0
+    for it in all_items:
+        if backfilled >= 15:
+            break
+        if it.get("genres"):
+            continue
+        kind = "anime" if it in anime_items else "manga"
+        try:
+            data = api.get_anime(it["mal_id"]) if kind == "anime" else api.get_manga(it["mal_id"])
+            if data:
+                genres = [g["name"] for g in data.get("genres", [])]
+                studios = [s["name"] for s in data.get("studios", [])] if kind == "anime" else []
+                upd = {}
+                if genres:
+                    upd["genres"] = genres
+                    it["genres"] = genres
+                if studios:
+                    upd["studios"] = studios
+                    it["studios"] = studios
+                if upd:
+                    col = db.anime_list_col if kind == "anime" else db.manga_list_col
+                    col.update_one(
+                        {"user_id": current_user.id, "mal_id": it["mal_id"]},
+                        {"$set": upd},
+                    )
+                    backfilled += 1
+        except Exception:
+            pass
 
-        completed = by_status.get("Completed", 0)
-        dropped = by_status.get("Dropped", 0)
+    # ── Episodes watched / Chapters read ──
+    total_episodes = sum(i.get("progress", 0) for i in anime_items)
+    total_chapters = sum(i.get("progress", 0) for i in manga_items)
 
-        progress_key = "total_eps" if kind == "anime" else "total_chs"
-        progress_total = sum(i.get("progress", 0) for i in items)
+    # ── Days watched (anime eps × 24min / 60 / 24) ──
+    days_watched = round(total_episodes * 24 / 60 / 24, 1) if total_episodes else 0
 
-        # progress completion buckets
-        fully_done = 0
-        in_progress = 0
-        not_started = 0
-        for i in items:
-            prog = i.get("progress", 0)
-            cap = i.get(progress_key, 0)
-            if prog > 0 and cap > 0 and prog >= cap:
-                fully_done += 1
-            elif prog > 0:
-                in_progress += 1
-            else:
-                not_started += 1
+    # ── Mean score (combined) ──
+    all_scores   = [i["score"] for i in all_items if i.get("score")]
+    mean_score   = round(sum(all_scores) / len(all_scores), 2) if all_scores else 0
 
-        # estimated time
-        if kind == "anime":
-            est_hours = round(progress_total * 24 / 60, 1)
-            est_days = round(est_hours / 24, 1)
+    # ── Completion rate ──
+    completed_count = sum(1 for i in all_items if i.get("status") == "Completed")
+    completion_rate = round(completed_count / total_titles * 100, 1) if total_titles else 0
+
+    # ── Drop rate ──
+    dropped_count = sum(1 for i in all_items if i.get("status") == "Dropped")
+    drop_rate     = round(dropped_count / total_titles * 100, 1) if total_titles else 0
+
+    # ── Score distribution (1–10) ──
+    score_dist = {str(s): 0 for s in range(1, 11)}
+    for sc in all_scores:
+        score_dist[str(sc)] += 1
+
+    # ── Genre distribution ──
+    genre_counter = Counter()
+    for it in all_items:
+        for g in it.get("genres", []):
+            genre_counter[g] += 1
+    # top 6 genres + "Other"
+    GENRE_COLORS = ["#c084fc", "#34d399", "#fb923c", "#60a5fa", "#f97316", "#f472b6", "#6b7280"]
+    top_genres_raw = genre_counter.most_common(6)
+    other_count    = sum(c for _, c in genre_counter.most_common()[6:])
+    genre_labels   = [g for g, _ in top_genres_raw]
+    genre_values   = [c for _, c in top_genres_raw]
+    if other_count > 0:
+        genre_labels.append("Other")
+        genre_values.append(other_count)
+    genre_total = sum(genre_values) or 1
+
+    # ── Taste profile: average score per genre (top 6) ──
+    genre_score_sums   = {}
+    genre_score_counts = {}
+    for it in all_items:
+        if not it.get("score"):
+            continue
+        for g in it.get("genres", []):
+            genre_score_sums[g]   = genre_score_sums.get(g, 0) + it["score"]
+            genre_score_counts[g] = genre_score_counts.get(g, 0) + 1
+    # use the same top genres, compute avg rating
+    taste_labels = []
+    taste_values = []
+    for g in genre_labels:
+        if g == "Other":
+            continue
+        taste_labels.append(g)
+        if genre_score_counts.get(g, 0) > 0:
+            taste_values.append(round(genre_score_sums[g] / genre_score_counts[g], 1))
         else:
-            est_hours = round(progress_total * 5 / 60, 1)
-            est_days = round(est_hours / 24, 1)
+            taste_values.append(0)
 
-        # score median & mode
-        score_median = round(_median(scored), 1) if scored else 0
-        score_mode = Counter(scored).most_common(1)[0][0] if scored else 0
+    # ── Watch activity (last 12 months) - episodes & chapters ──
+    now = datetime.utcnow()
+    month_keys = []
+    for m in range(11, -1, -1):
+        dt = now - timedelta(days=m * 30)
+        month_keys.append(dt.strftime("%Y-%m"))
 
-        # top scored titles (top 5)
-        with_score = [i for i in items if i.get("score")]
-        top_scored = sorted(with_score, key=lambda x: (-x["score"], x.get("title", "")))[:5]
+    anime_activity = {k: 0 for k in month_keys}
+    manga_activity = {k: 0 for k in month_keys}
+    for it in anime_items:
+        added = it.get("added_at")
+        if added:
+            key = added.strftime("%Y-%m")
+            if key in anime_activity:
+                anime_activity[key] += it.get("progress", 0)
+    for it in manga_items:
+        added = it.get("added_at")
+        if added:
+            key = added.strftime("%Y-%m")
+            if key in manga_activity:
+                manga_activity[key] += it.get("progress", 0)
 
-        # activity by month (last 12 months)
-        from datetime import datetime, timedelta
-        now = datetime.utcnow()
-        month_counts = {}
-        for m in range(11, -1, -1):
-            dt = now - timedelta(days=m * 30)
-            key = dt.strftime("%Y-%m")
-            month_counts[key] = 0
-        for i in items:
-            added = i.get("added_at")
-            if added:
-                key = added.strftime("%Y-%m")
-                if key in month_counts:
-                    month_counts[key] += 1
+    month_labels = []
+    for k in month_keys:
+        try:
+            month_labels.append(datetime.strptime(k, "%Y-%m").strftime("%b"))
+        except Exception:
+            month_labels.append(k[-2:])
 
-        return {
-            "total": total,
-            "by_status": by_status,
-            "avg_score": avg,
-            "scored_count": len(scored),
-            "total_progress": progress_total,
-            "total_episodes": progress_total if kind == "anime" else 0,
-            "total_chapters": progress_total if kind == "manga" else 0,
-            "score_distribution": score_dist,
-            "completion_rate": round(completed / total * 100, 1) if total else 0,
-            "drop_rate": round(dropped / total * 100, 1) if total else 0,
-            "est_hours": est_hours,
-            "est_days": est_days,
-            "score_median": score_median,
-            "score_mode": score_mode,
-            "top_scored": [
-                {"title": t.get("title_english") or t.get("title", "?"),
-                 "score": t["score"],
-                 "cover_url": t.get("cover_url", "")}
-                for t in top_scored
-            ],
-            "progress_buckets": {
-                "complete": fully_done,
-                "in_progress": in_progress,
-                "not_started": not_started,
-            },
-            "activity_by_month": month_counts,
-        }
+    # ── Advanced metrics ──
+    # Score deviation: diff between user's mean and global MAL avg (~6.9)
+    GLOBAL_AVG = 6.9
+    score_deviation = round(mean_score - GLOBAL_AVG, 2) if mean_score else 0
 
-    anime_stats = _build_stats(anime_items, db.ANIME_STATUSES, "anime")
-    manga_stats = _build_stats(manga_items, db.MANGA_STATUSES, "manga")
+    # Mainstream index: % of library in top 500 popularity (score >= 7.5 as proxy)
+    popular_count = sum(1 for i in all_items if i.get("score") and i["score"] >= 7)
+    mainstream_idx = round(popular_count / len(all_scores) * 100) if all_scores else 0
 
-    # combined activity
-    combined_activity = {}
-    for key in anime_stats["activity_by_month"]:
-        combined_activity[key] = (
-            anime_stats["activity_by_month"].get(key, 0)
-            + manga_stats["activity_by_month"].get(key, 0)
-        )
+    # Avg episode length (assume 24min standard)
+    avg_ep_length = 23.4  # most anime are ~24min, display constant
+
+    # Bingeability: avg episodes per title for completed anime
+    completed_anime = [i for i in anime_items if i.get("status") == "Completed" and i.get("progress", 0) > 0]
+    if completed_anime:
+        # estimate episodes per session: total eps / number of completed titles
+        binge_score = round(sum(i["progress"] for i in completed_anime) / len(completed_anime), 1)
+    else:
+        binge_score = 0
+
+    # Top studio
+    studio_counter = Counter()
+    for it in anime_items:
+        for s in it.get("studios", []):
+            studio_counter[s] += 1
+    top_studio_name  = studio_counter.most_common(1)[0][0] if studio_counter else "—"
+    top_studio_count = studio_counter.most_common(1)[0][1] if studio_counter else 0
 
     return render_template("statistics.html",
-                           anime_stats=anime_stats,
-                           manga_stats=manga_stats,
-                           anime_statuses=db.ANIME_STATUSES,
-                           manga_statuses=db.MANGA_STATUSES,
-                           status_colors=db.STATUS_COLORS,
-                           combined_activity=combined_activity)
+        total_titles=total_titles,
+        total_episodes=total_episodes,
+        total_chapters=total_chapters,
+        days_watched=days_watched,
+        mean_score=mean_score,
+        completion_rate=completion_rate,
+        drop_rate=drop_rate,
+        score_dist=score_dist,
+        genre_labels=genre_labels,
+        genre_values=genre_values,
+        genre_total=genre_total,
+        genre_colors=GENRE_COLORS,
+        taste_labels=taste_labels,
+        taste_values=taste_values,
+        month_labels=month_labels,
+        anime_activity=list(anime_activity.values()),
+        manga_activity=list(manga_activity.values()),
+        score_deviation=score_deviation,
+        mainstream_idx=mainstream_idx,
+        avg_ep_length=avg_ep_length,
+        binge_score=binge_score,
+        top_studio_name=top_studio_name,
+        top_studio_count=top_studio_count,
+        genres_available=sum(1 for i in all_items if i.get("genres")),
+    )
 
 
 # ------------------------------------------------------------------

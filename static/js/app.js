@@ -19,6 +19,8 @@ async function saveTracker() {
     status:    document.getElementById("t-status").value,
     progress:  progress,
     score:     document.getElementById("t-score").value || null,
+    genres:    t.genres || [],
+    studios:   t.studios || [],
   };
   if (t.kind === "anime") payload.total_eps = t.total;
   else                    payload.total_chs = t.total;
@@ -31,15 +33,16 @@ async function saveTracker() {
   });
   if (res.ok) {
     closeTracker();
-    alert("Saved to your list!");
+    showToast("Saved to your list!", "success");
   } else {
-    alert("Failed to save.");
+    showToast("Failed to save.", "error");
   }
 }
 
 // ---------- Delete from My List ----------
 async function deleteEntry(kind, malId, btn) {
-  if (!confirm("Remove from your list?")) return;
+  var ok = await showDialog('Remove Entry', 'Remove this from your list?', {okText: 'Remove', danger: true});
+  if (!ok) return;
   const res = await fetch(`/api/list/${kind}/${malId}/delete`, { method: "POST" });
   if (res.ok) btn.closest(".row").remove();
 }

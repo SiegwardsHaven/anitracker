@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=25">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=28">
 </head>
 <body>
   <nav class="topnav">
@@ -58,7 +58,105 @@
   <footer class="footer">
     <p>&copy; {{ now.year if now else "2026" }} NeoByte Labs. All rights reserved.</p>
   </footer>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=14"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=15"></script>
+
+  <!-- ── Global Toast + Confirm Dialog ── -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <div class="dialog-overlay" id="dialogOverlay">
+    <div class="dialog-box" id="dialogBox">
+      <h3 class="dialog-title" id="dialogTitle"></h3>
+      <p class="dialog-msg" id="dialogMsg"></p>
+      <input type="text" class="dialog-input" id="dialogInput" style="display:none" autocomplete="off">
+      <div class="dialog-actions">
+        <button class="btn dialog-cancel" id="dialogCancel">Cancel</button>
+        <button class="btn primary dialog-ok" id="dialogOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  /* ── Toast notifications ── */
+  (function(){
+    var container = document.getElementById('toastContainer');
+    window.showToast = function(msg, type) {
+      type = type || 'info';
+      var t = document.createElement('div');
+      t.className = 'toast toast-' + type;
+      t.textContent = msg;
+      container.appendChild(t);
+      requestAnimationFrame(function(){ t.classList.add('show'); });
+      setTimeout(function(){
+        t.classList.remove('show');
+        setTimeout(function(){ t.remove(); }, 350);
+      }, 3000);
+    };
+  })();
+
+  /* ── Dialog (replaces confirm/alert) ── */
+  (function(){
+    var overlay = document.getElementById('dialogOverlay');
+    var titleEl = document.getElementById('dialogTitle');
+    var msgEl   = document.getElementById('dialogMsg');
+    var inputEl = document.getElementById('dialogInput');
+    var okBtn   = document.getElementById('dialogOk');
+    var cancelBtn = document.getElementById('dialogCancel');
+    var _resolve = null;
+    var _isPrompt = false;
+
+    function close(val) {
+      overlay.classList.remove('open');
+      inputEl.style.display = 'none';
+      if (_resolve) { _resolve(val); _resolve = null; }
+    }
+
+    okBtn.addEventListener('click', function(){ close(_isPrompt ? inputEl.value : true); });
+    cancelBtn.addEventListener('click', function(){ close(_isPrompt ? null : false); });
+    overlay.addEventListener('click', function(e){
+      if (e.target === overlay) close(_isPrompt ? null : false);
+    });
+
+    window.showDialog = function(title, msg, opts) {
+      opts = opts || {};
+      _isPrompt = false;
+      titleEl.textContent = title;
+      msgEl.textContent = msg;
+      okBtn.textContent = opts.okText || 'OK';
+      if (opts.confirmOnly) {
+        cancelBtn.style.display = 'none';
+      } else {
+        cancelBtn.style.display = '';
+        cancelBtn.textContent = opts.cancelText || 'Cancel';
+      }
+      if (opts.danger) {
+        okBtn.classList.add('danger');
+      } else {
+        okBtn.classList.remove('danger');
+      }
+      overlay.classList.add('open');
+      return new Promise(function(resolve){ _resolve = resolve; });
+    };
+
+    window.showPrompt = function(title, msg, defaultVal) {
+      _isPrompt = true;
+      titleEl.textContent = title;
+      msgEl.textContent = msg || '';
+      inputEl.value = defaultVal || '';
+      inputEl.style.display = '';
+      cancelBtn.style.display = '';
+      cancelBtn.textContent = 'Cancel';
+      okBtn.textContent = 'OK';
+      okBtn.classList.remove('danger');
+      overlay.classList.add('open');
+      setTimeout(function(){ inputEl.focus(); }, 100);
+      return new Promise(function(resolve){ _resolve = resolve; });
+    };
+      overlay.classList.add('open');
+      return new Promise(function(resolve){ _resolve = resolve; });
+    };
+  })();
+  </script>
+
   <script>
     document.addEventListener('click', function(e) {
       document.querySelectorAll('.nav-profile-dropdown.open').forEach(function(d) {

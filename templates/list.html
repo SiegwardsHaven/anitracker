@@ -282,7 +282,7 @@ async function saveEdit() {
     closeEditModal();
     location.reload();
   } else {
-    alert('Failed to save.');
+    showToast('Failed to save.', 'error');
   }
 }
 

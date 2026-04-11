@@ -36,7 +36,7 @@ def init_db():
 
 def upsert_anime(user_id, mal_id, title, cover_url, total_eps, status,
                  progress=0, score=None, title_english=None, title_japanese=None,
-                 notes=None):
+                 notes=None, genres=None, studios=None):
     update_fields = {
         "title": title,
         "cover_url": cover_url,
@@ -52,6 +52,10 @@ def upsert_anime(user_id, mal_id, title, cover_url, total_eps, status,
         update_fields["title_japanese"] = title_japanese
     if notes is not None:
         update_fields["notes"] = notes or ""
+    if genres is not None:
+        update_fields["genres"] = genres
+    if studios is not None:
+        update_fields["studios"] = studios
     anime_list_col.update_one(
         {"user_id": user_id, "mal_id": mal_id},
         {"$set": update_fields,
@@ -84,7 +88,7 @@ def list_anime(user_id, status=None):
 
 def upsert_manga(user_id, mal_id, title, cover_url, total_chs, status,
                  progress=0, score=None, title_english=None, title_japanese=None,
-                 notes=None):
+                 notes=None, genres=None):
     update_fields = {
         "title": title,
         "cover_url": cover_url,
@@ -100,6 +104,8 @@ def upsert_manga(user_id, mal_id, title, cover_url, total_chs, status,
         update_fields["title_japanese"] = title_japanese
     if notes is not None:
         update_fields["notes"] = notes or ""
+    if genres is not None:
+        update_fields["genres"] = genres
     manga_list_col.update_one(
         {"user_id": user_id, "mal_id": mal_id},
         {"$set": update_fields,
