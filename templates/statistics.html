@@ -2,72 +2,186 @@
 {% block title %}Statistics · AniTracker{% endblock %}
 {% block content %}
 
-<div class="stats-page">
-  <h1 class="stats-page-title">Your Statistics</h1>
+{% set total_titles = anime_stats.total + manga_stats.total %}
+{% set total_scored = anime_stats.scored_count + manga_stats.scored_count %}
+{% set combined_avg = ((anime_stats.avg_score * anime_stats.scored_count + manga_stats.avg_score * manga_stats.scored_count) / total_scored)|round(1) if total_scored > 0 else 0 %}
 
-  <!-- ───── Overview Cards ───── -->
-  <div class="stats-overview">
-    <div class="overview-card">
-      <span class="overview-value">{{ anime_stats.total }}</span>
-      <span class="overview-label">Anime</span>
-    </div>
-    <div class="overview-card">
-      <span class="overview-value">{{ manga_stats.total }}</span>
-      <span class="overview-label">Manga</span>
-    </div>
-    <div class="overview-card">
-      <span class="overview-value">{{ anime_stats.total_episodes }}</span>
-      <span class="overview-label">Episodes Watched</span>
-    </div>
-    <div class="overview-card">
-      <span class="overview-value">{{ manga_stats.total_chapters }}</span>
-      <span class="overview-label">Chapters Read</span>
-    </div>
-    <div class="overview-card">
-      <span class="overview-value">{{ anime_stats.avg_score or '—' }}</span>
-      <span class="overview-label">Avg Anime Score</span>
-    </div>
-    <div class="overview-card">
-      <span class="overview-value">{{ manga_stats.avg_score or '—' }}</span>
-      <span class="overview-label">Avg Manga Score</span>
+<div class="dash">
+  <!-- ───── Header ───── -->
+  <div class="dash-header">
+    <div class="dash-header-left">
+      <h1 class="dash-title">Statistics</h1>
+      <p class="dash-sub">Overview of your anime &amp; manga library</p>
     </div>
   </div>
 
-  <!-- ───── Anime Section ───── -->
-  <div class="stats-section">
-    <h2>Anime</h2>
-    <div class="stats-panels">
-      <!-- Status Breakdown -->
-      <div class="stats-card">
-        <h3>Status Breakdown</h3>
-        {% set atotal = anime_stats.total or 1 %}
-        <div class="donut-chart" style="background: conic-gradient(
-          {% set ns = namespace(offset=0) %}
-          {% for s in anime_statuses %}
-            {{ status_colors.get(s, '#888') }} {{ ns.offset }}deg {{ ns.offset + (anime_stats.by_status.get(s, 0) / atotal * 360) }}deg
-            {% set ns.offset = ns.offset + (anime_stats.by_status.get(s, 0) / atotal * 360) %}
-            {% if not loop.last %},{% endif %}
-          {% endfor %}
-        );">
-          <div class="donut-hole">
-            <span class="donut-number">{{ anime_stats.total }}</span>
-            <span class="donut-label">Total</span>
-          </div>
+  <!-- ───── Tab Bar ───── -->
+  <div class="dash-tabs">
+    <button class="dash-tab active" data-tab="overview">Overview</button>
+    <button class="dash-tab" data-tab="anime">Anime</button>
+    <button class="dash-tab" data-tab="manga">Manga</button>
+  </div>
+
+  <!-- ═══════ OVERVIEW TAB ═══════ -->
+  <div class="dash-panel" id="tab-overview">
+    <!-- Summary row -->
+    <div class="dash-summary">
+      <div class="summary-card">
+        <span class="summary-label">Total Titles</span>
+        <span class="summary-value">{{ total_titles }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Episodes Watched</span>
+        <span class="summary-value">{{ anime_stats.total_episodes }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Chapters Read</span>
+        <span class="summary-value">{{ manga_stats.total_chapters }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Average Score</span>
+        <span class="summary-value">{{ combined_avg or '—' }}</span>
+      </div>
+    </div>
+
+    <!-- Dual pie row -->
+    <div class="dash-row">
+      <!-- Anime pie -->
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Anime by Status</h3>
+          <span class="dash-card-badge">{{ anime_stats.total }} total</span>
         </div>
-        <div class="chart-legend">
-          {% for s in anime_statuses %}
-          <div class="legend-item">
-            <span class="legend-dot" style="background: {{ status_colors.get(s, '#888') }}"></span>
-            <span class="legend-name">{{ s }}</span>
-            <span class="legend-count">{{ anime_stats.by_status.get(s, 0) }}</span>
+        <div class="pie-area">
+          {% set atotal = anime_stats.total or 1 %}
+          <div class="donut-chart" style="background: conic-gradient(
+            {% set ns = namespace(offset=0) %}
+            {% for s in anime_statuses %}
+              {{ status_colors.get(s, '#888') }} {{ ns.offset }}deg {{ ns.offset + (anime_stats.by_status.get(s, 0) / atotal * 360) }}deg
+              {% set ns.offset = ns.offset + (anime_stats.by_status.get(s, 0) / atotal * 360) %}
+              {% if not loop.last %},{% endif %}
+            {% endfor %}
+          );">
+            <div class="donut-hole">
+              <span class="donut-number">{{ anime_stats.total }}</span>
+              <span class="donut-label">Total</span>
+            </div>
           </div>
-          {% endfor %}
+          <div class="chart-legend">
+            {% for s in anime_statuses %}
+            {% set cnt = anime_stats.by_status.get(s, 0) %}
+            <div class="legend-item">
+              <span class="legend-dot" style="background: {{ status_colors.get(s, '#888') }}"></span>
+              <span class="legend-name">{{ s }}</span>
+              <span class="legend-pct">{{ ((cnt / atotal) * 100)|round(1) }}%</span>
+              <span class="legend-count">{{ cnt }}</span>
+            </div>
+            {% endfor %}
+          </div>
         </div>
       </div>
 
-      <!-- Score Distribution -->
-      <div class="stats-card">
-        <h3>Score Distribution</h3>
+      <!-- Manga pie -->
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Manga by Status</h3>
+          <span class="dash-card-badge">{{ manga_stats.total }} total</span>
+        </div>
+        <div class="pie-area">
+          {% set mtotal = manga_stats.total or 1 %}
+          <div class="donut-chart" style="background: conic-gradient(
+            {% set ns = namespace(offset=0) %}
+            {% for s in manga_statuses %}
+              {{ status_colors.get(s, '#888') }} {{ ns.offset }}deg {{ ns.offset + (manga_stats.by_status.get(s, 0) / mtotal * 360) }}deg
+              {% set ns.offset = ns.offset + (manga_stats.by_status.get(s, 0) / mtotal * 360) %}
+              {% if not loop.last %},{% endif %}
+            {% endfor %}
+          );">
+            <div class="donut-hole">
+              <span class="donut-number">{{ manga_stats.total }}</span>
+              <span class="donut-label">Total</span>
+            </div>
+          </div>
+          <div class="chart-legend">
+            {% for s in manga_statuses %}
+            {% set cnt = manga_stats.by_status.get(s, 0) %}
+            <div class="legend-item">
+              <span class="legend-dot" style="background: {{ status_colors.get(s, '#888') }}"></span>
+              <span class="legend-name">{{ s }}</span>
+              <span class="legend-pct">{{ ((cnt / mtotal) * 100)|round(1) }}%</span>
+              <span class="legend-count">{{ cnt }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ ANIME TAB ═══════ -->
+  <div class="dash-panel hidden" id="tab-anime">
+    <!-- Summary row -->
+    <div class="dash-summary">
+      <div class="summary-card">
+        <span class="summary-label">Total Anime</span>
+        <span class="summary-value">{{ anime_stats.total }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Episodes Watched</span>
+        <span class="summary-value">{{ anime_stats.total_episodes }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Avg Score</span>
+        <span class="summary-value">{{ anime_stats.avg_score or '—' }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Scored Titles</span>
+        <span class="summary-value">{{ anime_stats.scored_count }}</span>
+      </div>
+    </div>
+
+    <div class="dash-row">
+      <!-- Status donut -->
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Status Breakdown</h3>
+          <span class="dash-card-badge">{{ anime_stats.total }} total</span>
+        </div>
+        <div class="pie-area">
+          {% set atotal = anime_stats.total or 1 %}
+          <div class="donut-chart" style="background: conic-gradient(
+            {% set ns = namespace(offset=0) %}
+            {% for s in anime_statuses %}
+              {{ status_colors.get(s, '#888') }} {{ ns.offset }}deg {{ ns.offset + (anime_stats.by_status.get(s, 0) / atotal * 360) }}deg
+              {% set ns.offset = ns.offset + (anime_stats.by_status.get(s, 0) / atotal * 360) %}
+              {% if not loop.last %},{% endif %}
+            {% endfor %}
+          );">
+            <div class="donut-hole">
+              <span class="donut-number">{{ anime_stats.total }}</span>
+              <span class="donut-label">Total</span>
+            </div>
+          </div>
+          <div class="chart-legend">
+            {% for s in anime_statuses %}
+            {% set cnt = anime_stats.by_status.get(s, 0) %}
+            <div class="legend-item">
+              <span class="legend-dot" style="background: {{ status_colors.get(s, '#888') }}"></span>
+              <span class="legend-name">{{ s }}</span>
+              <span class="legend-pct">{{ ((cnt / atotal) * 100)|round(1) }}%</span>
+              <span class="legend-count">{{ cnt }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Score distribution -->
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Score Distribution</h3>
+          <span class="dash-card-badge">{{ anime_stats.scored_count }} scored</span>
+        </div>
         <div class="bar-chart">
           {% set max_score_count = anime_stats.score_distribution.values()|max if anime_stats.scored_count > 0 else 1 %}
           {% for i in range(10, 0, -1) %}
@@ -75,7 +189,7 @@
           <div class="bar-row">
             <span class="bar-label">{{ i }}</span>
             <div class="bar-track">
-              <div class="bar-fill" style="width: {{ (count / (max_score_count or 1) * 100)|round }}%; background: linear-gradient(90deg, var(--accent), var(--accent-2));"></div>
+              <div class="bar-fill" style="width: {{ (count / (max_score_count or 1) * 100)|round }}%; background: var(--accent);"></div>
             </div>
             <span class="bar-count">{{ count }}</span>
           </div>
@@ -85,41 +199,70 @@
     </div>
   </div>
 
-  <!-- ───── Manga Section ───── -->
-  <div class="stats-section">
-    <h2>Manga</h2>
-    <div class="stats-panels">
-      <!-- Status Breakdown -->
-      <div class="stats-card">
-        <h3>Status Breakdown</h3>
-        {% set mtotal = manga_stats.total or 1 %}
-        <div class="donut-chart" style="background: conic-gradient(
-          {% set ns = namespace(offset=0) %}
-          {% for s in manga_statuses %}
-            {{ status_colors.get(s, '#888') }} {{ ns.offset }}deg {{ ns.offset + (manga_stats.by_status.get(s, 0) / mtotal * 360) }}deg
-            {% set ns.offset = ns.offset + (manga_stats.by_status.get(s, 0) / mtotal * 360) %}
-            {% if not loop.last %},{% endif %}
-          {% endfor %}
-        );">
-          <div class="donut-hole">
-            <span class="donut-number">{{ manga_stats.total }}</span>
-            <span class="donut-label">Total</span>
-          </div>
+  <!-- ═══════ MANGA TAB ═══════ -->
+  <div class="dash-panel hidden" id="tab-manga">
+    <!-- Summary row -->
+    <div class="dash-summary">
+      <div class="summary-card">
+        <span class="summary-label">Total Manga</span>
+        <span class="summary-value">{{ manga_stats.total }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Chapters Read</span>
+        <span class="summary-value">{{ manga_stats.total_chapters }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Avg Score</span>
+        <span class="summary-value">{{ manga_stats.avg_score or '—' }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Scored Titles</span>
+        <span class="summary-value">{{ manga_stats.scored_count }}</span>
+      </div>
+    </div>
+
+    <div class="dash-row">
+      <!-- Status donut -->
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Status Breakdown</h3>
+          <span class="dash-card-badge">{{ manga_stats.total }} total</span>
         </div>
-        <div class="chart-legend">
-          {% for s in manga_statuses %}
-          <div class="legend-item">
-            <span class="legend-dot" style="background: {{ status_colors.get(s, '#888') }}"></span>
-            <span class="legend-name">{{ s }}</span>
-            <span class="legend-count">{{ manga_stats.by_status.get(s, 0) }}</span>
+        <div class="pie-area">
+          {% set mtotal = manga_stats.total or 1 %}
+          <div class="donut-chart" style="background: conic-gradient(
+            {% set ns = namespace(offset=0) %}
+            {% for s in manga_statuses %}
+              {{ status_colors.get(s, '#888') }} {{ ns.offset }}deg {{ ns.offset + (manga_stats.by_status.get(s, 0) / mtotal * 360) }}deg
+              {% set ns.offset = ns.offset + (manga_stats.by_status.get(s, 0) / mtotal * 360) %}
+              {% if not loop.last %},{% endif %}
+            {% endfor %}
+          );">
+            <div class="donut-hole">
+              <span class="donut-number">{{ manga_stats.total }}</span>
+              <span class="donut-label">Total</span>
+            </div>
           </div>
-          {% endfor %}
+          <div class="chart-legend">
+            {% for s in manga_statuses %}
+            {% set cnt = manga_stats.by_status.get(s, 0) %}
+            <div class="legend-item">
+              <span class="legend-dot" style="background: {{ status_colors.get(s, '#888') }}"></span>
+              <span class="legend-name">{{ s }}</span>
+              <span class="legend-pct">{{ ((cnt / mtotal) * 100)|round(1) }}%</span>
+              <span class="legend-count">{{ cnt }}</span>
+            </div>
+            {% endfor %}
+          </div>
         </div>
       </div>
 
-      <!-- Score Distribution -->
-      <div class="stats-card">
-        <h3>Score Distribution</h3>
+      <!-- Score distribution -->
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Score Distribution</h3>
+          <span class="dash-card-badge">{{ manga_stats.scored_count }} scored</span>
+        </div>
         <div class="bar-chart">
           {% set max_score_count_m = manga_stats.score_distribution.values()|max if manga_stats.scored_count > 0 else 1 %}
           {% for i in range(10, 0, -1) %}
@@ -127,7 +270,7 @@
           <div class="bar-row">
             <span class="bar-label">{{ i }}</span>
             <div class="bar-track">
-              <div class="bar-fill" style="width: {{ (count / (max_score_count_m or 1) * 100)|round }}%; background: linear-gradient(90deg, var(--accent), var(--accent-2));"></div>
+              <div class="bar-fill" style="width: {{ (count / (max_score_count_m or 1) * 100)|round }}%; background: var(--accent-2);"></div>
             </div>
             <span class="bar-count">{{ count }}</span>
           </div>
@@ -137,5 +280,17 @@
     </div>
   </div>
 </div>
+
+<script>
+(function(){
+  const tabs = document.querySelectorAll('.dash-tab');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(b => b.classList.remove('active'));
+    t.classList.add('active');
+    document.querySelectorAll('.dash-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('tab-' + t.dataset.tab).classList.remove('hidden');
+  }));
+})();
+</script>
 
 {% endblock %}
