@@ -43,7 +43,7 @@ a { color: inherit; text-decoration: none; }
 }
 .btn-logout:hover { color: var(--accent); }
 
-.page { padding: 32px 60px 80px; margin: 0 auto; }
+.page { padding: 32px 60px 80px; margin: 0 auto; width: 100%; box-sizing: border-box; }
 
 /* ---------- buttons ---------- */
 .btn {
