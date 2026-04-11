@@ -445,49 +445,123 @@ def api_carousel(kind):
 @app.route("/statistics")
 @login_required
 def statistics():
+    from collections import Counter
+    from statistics import median as _median
+
     anime_items = db.list_anime(current_user.id)
     manga_items = db.list_manga(current_user.id)
 
-    # Anime stats
-    anime_stats = {
-        "total": len(anime_items),
-        "by_status": {},
-        "avg_score": 0,
-        "scored_count": 0,
-        "total_episodes": sum(i.get("progress", 0) for i in anime_items),
-        "score_distribution": {str(s): 0 for s in range(1, 11)},
-    }
-    scored = [i["score"] for i in anime_items if i.get("score")]
-    anime_stats["avg_score"] = round(sum(scored) / len(scored), 1) if scored else 0
-    anime_stats["scored_count"] = len(scored)
-    for s in db.ANIME_STATUSES:
-        anime_stats["by_status"][s] = len([i for i in anime_items if i["status"] == s])
-    for sc in scored:
-        anime_stats["score_distribution"][str(sc)] += 1
+    # ── helper: build stats dict for a list ──
+    def _build_stats(items, statuses, kind):
+        total = len(items)
+        scored = [i["score"] for i in items if i.get("score")]
+        avg = round(sum(scored) / len(scored), 1) if scored else 0
+        score_dist = {str(s): 0 for s in range(1, 11)}
+        for sc in scored:
+            score_dist[str(sc)] += 1
 
-    # Manga stats
-    manga_stats = {
-        "total": len(manga_items),
-        "by_status": {},
-        "avg_score": 0,
-        "scored_count": 0,
-        "total_chapters": sum(i.get("progress", 0) for i in manga_items),
-        "score_distribution": {str(s): 0 for s in range(1, 11)},
-    }
-    scored_m = [i["score"] for i in manga_items if i.get("score")]
-    manga_stats["avg_score"] = round(sum(scored_m) / len(scored_m), 1) if scored_m else 0
-    manga_stats["scored_count"] = len(scored_m)
-    for s in db.MANGA_STATUSES:
-        manga_stats["by_status"][s] = len([i for i in manga_items if i["status"] == s])
-    for sc in scored_m:
-        manga_stats["score_distribution"][str(sc)] += 1
+        by_status = {}
+        for s in statuses:
+            by_status[s] = len([i for i in items if i["status"] == s])
+
+        completed = by_status.get("Completed", 0)
+        dropped = by_status.get("Dropped", 0)
+
+        progress_key = "total_eps" if kind == "anime" else "total_chs"
+        progress_total = sum(i.get("progress", 0) for i in items)
+
+        # progress completion buckets
+        fully_done = 0
+        in_progress = 0
+        not_started = 0
+        for i in items:
+            prog = i.get("progress", 0)
+            cap = i.get(progress_key, 0)
+            if prog > 0 and cap > 0 and prog >= cap:
+                fully_done += 1
+            elif prog > 0:
+                in_progress += 1
+            else:
+                not_started += 1
+
+        # estimated time
+        if kind == "anime":
+            est_hours = round(progress_total * 24 / 60, 1)
+            est_days = round(est_hours / 24, 1)
+        else:
+            est_hours = round(progress_total * 5 / 60, 1)
+            est_days = round(est_hours / 24, 1)
+
+        # score median & mode
+        score_median = round(_median(scored), 1) if scored else 0
+        score_mode = Counter(scored).most_common(1)[0][0] if scored else 0
+
+        # top scored titles (top 5)
+        with_score = [i for i in items if i.get("score")]
+        top_scored = sorted(with_score, key=lambda x: (-x["score"], x.get("title", "")))[:5]
+
+        # activity by month (last 12 months)
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        month_counts = {}
+        for m in range(11, -1, -1):
+            dt = now - timedelta(days=m * 30)
+            key = dt.strftime("%Y-%m")
+            month_counts[key] = 0
+        for i in items:
+            added = i.get("added_at")
+            if added:
+                key = added.strftime("%Y-%m")
+                if key in month_counts:
+                    month_counts[key] += 1
+
+        return {
+            "total": total,
+            "by_status": by_status,
+            "avg_score": avg,
+            "scored_count": len(scored),
+            "total_progress": progress_total,
+            "total_episodes": progress_total if kind == "anime" else 0,
+            "total_chapters": progress_total if kind == "manga" else 0,
+            "score_distribution": score_dist,
+            "completion_rate": round(completed / total * 100, 1) if total else 0,
+            "drop_rate": round(dropped / total * 100, 1) if total else 0,
+            "est_hours": est_hours,
+            "est_days": est_days,
+            "score_median": score_median,
+            "score_mode": score_mode,
+            "top_scored": [
+                {"title": t.get("title_english") or t.get("title", "?"),
+                 "score": t["score"],
+                 "cover_url": t.get("cover_url", "")}
+                for t in top_scored
+            ],
+            "progress_buckets": {
+                "complete": fully_done,
+                "in_progress": in_progress,
+                "not_started": not_started,
+            },
+            "activity_by_month": month_counts,
+        }
+
+    anime_stats = _build_stats(anime_items, db.ANIME_STATUSES, "anime")
+    manga_stats = _build_stats(manga_items, db.MANGA_STATUSES, "manga")
+
+    # combined activity
+    combined_activity = {}
+    for key in anime_stats["activity_by_month"]:
+        combined_activity[key] = (
+            anime_stats["activity_by_month"].get(key, 0)
+            + manga_stats["activity_by_month"].get(key, 0)
+        )
 
     return render_template("statistics.html",
                            anime_stats=anime_stats,
                            manga_stats=manga_stats,
                            anime_statuses=db.ANIME_STATUSES,
                            manga_statuses=db.MANGA_STATUSES,
-                           status_colors=db.STATUS_COLORS)
+                           status_colors=db.STATUS_COLORS,
+                           combined_activity=combined_activity)
 
 
 # ------------------------------------------------------------------

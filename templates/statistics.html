@@ -5,6 +5,7 @@
 {% set total_titles = anime_stats.total + manga_stats.total %}
 {% set total_scored = anime_stats.scored_count + manga_stats.scored_count %}
 {% set combined_avg = ((anime_stats.avg_score * anime_stats.scored_count + manga_stats.avg_score * manga_stats.scored_count) / total_scored)|round(1) if total_scored > 0 else 0 %}
+{% set combined_completion = (((anime_stats.by_status.get('Completed',0) + manga_stats.by_status.get('Completed',0)) / total_titles * 100)|round(1)) if total_titles > 0 else 0 %}
 
 <div class="dash">
   <!-- ───── Header ───── -->
@@ -42,9 +43,17 @@
         <span class="summary-label">Average Score</span>
         <span class="summary-value">{{ combined_avg or '—' }}</span>
       </div>
+      <div class="summary-card">
+        <span class="summary-label">Completion Rate</span>
+        <span class="summary-value">{{ combined_completion }}%</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Est. Watch Time</span>
+        <span class="summary-value">{{ anime_stats.est_days }}<small class="summary-unit">days</small></span>
+      </div>
     </div>
 
-    <!-- Dual pie row -->
+    <!-- Dual pie row: Anime vs Manga status -->
     <div class="dash-row">
       <!-- Anime pie -->
       <div class="dash-card">
@@ -116,6 +125,63 @@
         </div>
       </div>
     </div>
+
+    <!-- Library Composition + Activity Timeline -->
+    <div class="dash-row">
+      <!-- Library composition donut -->
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Library Composition</h3>
+          <span class="dash-card-badge">{{ total_titles }} titles</span>
+        </div>
+        <div class="pie-area">
+          {% set comp_total = total_titles or 1 %}
+          {% set anime_pct = (anime_stats.total / comp_total * 360) %}
+          {% set manga_pct = (manga_stats.total / comp_total * 360) %}
+          <div class="donut-chart" style="background: conic-gradient(
+            var(--accent) 0deg {{ anime_pct }}deg,
+            var(--accent-2) {{ anime_pct }}deg {{ anime_pct + manga_pct }}deg
+          );">
+            <div class="donut-hole">
+              <span class="donut-number">{{ total_titles }}</span>
+              <span class="donut-label">Total</span>
+            </div>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item">
+              <span class="legend-dot" style="background: var(--accent)"></span>
+              <span class="legend-name">Anime</span>
+              <span class="legend-pct">{{ ((anime_stats.total / comp_total) * 100)|round(1) }}%</span>
+              <span class="legend-count">{{ anime_stats.total }}</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background: var(--accent-2)"></span>
+              <span class="legend-name">Manga</span>
+              <span class="legend-pct">{{ ((manga_stats.total / comp_total) * 100)|round(1) }}%</span>
+              <span class="legend-count">{{ manga_stats.total }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity Timeline (last 12 months) -->
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Activity Timeline</h3>
+          <span class="dash-card-badge">Last 12 months</span>
+        </div>
+        <div class="timeline-chart" id="timeline-overview">
+          {% set act_vals = combined_activity.values()|list %}
+          {% set act_max = act_vals|max if act_vals|length > 0 and act_vals|max > 0 else 1 %}
+          {% for month, count in combined_activity.items() %}
+          <div class="timeline-bar-wrap" title="{{ month }}: {{ count }} titles">
+            <div class="timeline-bar" style="height: {{ (count / act_max * 100)|round }}%;"></div>
+            <span class="timeline-label">{{ month[-2:] }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ═══════ ANIME TAB ═══════ -->
@@ -135,8 +201,16 @@
         <span class="summary-value">{{ anime_stats.avg_score or '—' }}</span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">Scored Titles</span>
-        <span class="summary-value">{{ anime_stats.scored_count }}</span>
+        <span class="summary-label">Completion Rate</span>
+        <span class="summary-value">{{ anime_stats.completion_rate }}%</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Drop Rate</span>
+        <span class="summary-value">{{ anime_stats.drop_rate }}%</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Est. Watch Time</span>
+        <span class="summary-value">{{ anime_stats.est_days }}<small class="summary-unit">days</small></span>
       </div>
     </div>
 
@@ -180,7 +254,7 @@
       <div class="dash-card">
         <div class="dash-card-head">
           <h3>Score Distribution</h3>
-          <span class="dash-card-badge">{{ anime_stats.scored_count }} scored</span>
+          <span class="dash-card-badge">Median {{ anime_stats.score_median }} · Mode {{ anime_stats.score_mode }}</span>
         </div>
         <div class="bar-chart">
           {% set max_score_count = anime_stats.score_distribution.values()|max if anime_stats.scored_count > 0 else 1 %}
@@ -192,6 +266,100 @@
               <div class="bar-fill" style="width: {{ (count / (max_score_count or 1) * 100)|round }}%; background: var(--accent);"></div>
             </div>
             <span class="bar-count">{{ count }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress + Top Scored row -->
+    <div class="dash-row">
+      <!-- Progress Completion donut -->
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Progress Completion</h3>
+          <span class="dash-card-badge">{{ anime_stats.total }} titles</span>
+        </div>
+        <div class="pie-area">
+          {% set pb = anime_stats.progress_buckets %}
+          {% set pb_total = anime_stats.total or 1 %}
+          {% set deg_done = (pb.complete / pb_total * 360) %}
+          {% set deg_prog = (pb.in_progress / pb_total * 360) %}
+          {% set deg_none = (pb.not_started / pb_total * 360) %}
+          <div class="donut-chart" style="background: conic-gradient(
+            #22c55e 0deg {{ deg_done }}deg,
+            #3b82f6 {{ deg_done }}deg {{ deg_done + deg_prog }}deg,
+            #6b7280 {{ deg_done + deg_prog }}deg {{ deg_done + deg_prog + deg_none }}deg
+          );">
+            <div class="donut-hole">
+              <span class="donut-number">{{ pb.complete }}</span>
+              <span class="donut-label">Done</span>
+            </div>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item">
+              <span class="legend-dot" style="background: #22c55e"></span>
+              <span class="legend-name">Fully Watched</span>
+              <span class="legend-pct">{{ ((pb.complete / pb_total) * 100)|round(1) }}%</span>
+              <span class="legend-count">{{ pb.complete }}</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background: #3b82f6"></span>
+              <span class="legend-name">In Progress</span>
+              <span class="legend-pct">{{ ((pb.in_progress / pb_total) * 100)|round(1) }}%</span>
+              <span class="legend-count">{{ pb.in_progress }}</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background: #6b7280"></span>
+              <span class="legend-name">Not Started</span>
+              <span class="legend-pct">{{ ((pb.not_started / pb_total) * 100)|round(1) }}%</span>
+              <span class="legend-count">{{ pb.not_started }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Scored -->
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Top Scored Anime</h3>
+          <span class="dash-card-badge">Best of {{ anime_stats.scored_count }}</span>
+        </div>
+        {% if anime_stats.top_scored %}
+        <div class="top-list">
+          {% for t in anime_stats.top_scored %}
+          <div class="top-item">
+            <span class="top-rank">#{{ loop.index }}</span>
+            {% if t.cover_url %}
+            <img class="top-cover" src="{{ t.cover_url }}" alt="">
+            {% else %}
+            <div class="top-cover-placeholder">?</div>
+            {% endif %}
+            <span class="top-title">{{ t.title }}</span>
+            <span class="top-score">★ {{ t.score }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="no-data">No scored anime yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Activity Timeline -->
+    <div class="dash-row" style="grid-template-columns: 1fr;">
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Anime Added Over Time</h3>
+          <span class="dash-card-badge">Last 12 months</span>
+        </div>
+        <div class="timeline-chart">
+          {% set a_vals = anime_stats.activity_by_month.values()|list %}
+          {% set a_max = a_vals|max if a_vals|length > 0 and a_vals|max > 0 else 1 %}
+          {% for month, count in anime_stats.activity_by_month.items() %}
+          <div class="timeline-bar-wrap" title="{{ month }}: {{ count }} anime">
+            <div class="timeline-bar" style="height: {{ (count / a_max * 100)|round }}%; background: var(--accent);"></div>
+            <span class="timeline-label">{{ month[-2:] }}</span>
           </div>
           {% endfor %}
         </div>
@@ -216,8 +384,16 @@
         <span class="summary-value">{{ manga_stats.avg_score or '—' }}</span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">Scored Titles</span>
-        <span class="summary-value">{{ manga_stats.scored_count }}</span>
+        <span class="summary-label">Completion Rate</span>
+        <span class="summary-value">{{ manga_stats.completion_rate }}%</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Drop Rate</span>
+        <span class="summary-value">{{ manga_stats.drop_rate }}%</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Est. Read Time</span>
+        <span class="summary-value">{{ manga_stats.est_hours }}<small class="summary-unit">hrs</small></span>
       </div>
     </div>
 
@@ -261,7 +437,7 @@
       <div class="dash-card">
         <div class="dash-card-head">
           <h3>Score Distribution</h3>
-          <span class="dash-card-badge">{{ manga_stats.scored_count }} scored</span>
+          <span class="dash-card-badge">Median {{ manga_stats.score_median }} · Mode {{ manga_stats.score_mode }}</span>
         </div>
         <div class="bar-chart">
           {% set max_score_count_m = manga_stats.score_distribution.values()|max if manga_stats.scored_count > 0 else 1 %}
@@ -273,6 +449,100 @@
               <div class="bar-fill" style="width: {{ (count / (max_score_count_m or 1) * 100)|round }}%; background: var(--accent-2);"></div>
             </div>
             <span class="bar-count">{{ count }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress + Top Scored row -->
+    <div class="dash-row">
+      <!-- Progress Completion donut -->
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Progress Completion</h3>
+          <span class="dash-card-badge">{{ manga_stats.total }} titles</span>
+        </div>
+        <div class="pie-area">
+          {% set mpb = manga_stats.progress_buckets %}
+          {% set mpb_total = manga_stats.total or 1 %}
+          {% set mdeg_done = (mpb.complete / mpb_total * 360) %}
+          {% set mdeg_prog = (mpb.in_progress / mpb_total * 360) %}
+          {% set mdeg_none = (mpb.not_started / mpb_total * 360) %}
+          <div class="donut-chart" style="background: conic-gradient(
+            #22c55e 0deg {{ mdeg_done }}deg,
+            #3b82f6 {{ mdeg_done }}deg {{ mdeg_done + mdeg_prog }}deg,
+            #6b7280 {{ mdeg_done + mdeg_prog }}deg {{ mdeg_done + mdeg_prog + mdeg_none }}deg
+          );">
+            <div class="donut-hole">
+              <span class="donut-number">{{ mpb.complete }}</span>
+              <span class="donut-label">Done</span>
+            </div>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item">
+              <span class="legend-dot" style="background: #22c55e"></span>
+              <span class="legend-name">Fully Read</span>
+              <span class="legend-pct">{{ ((mpb.complete / mpb_total) * 100)|round(1) }}%</span>
+              <span class="legend-count">{{ mpb.complete }}</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background: #3b82f6"></span>
+              <span class="legend-name">In Progress</span>
+              <span class="legend-pct">{{ ((mpb.in_progress / mpb_total) * 100)|round(1) }}%</span>
+              <span class="legend-count">{{ mpb.in_progress }}</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background: #6b7280"></span>
+              <span class="legend-name">Not Started</span>
+              <span class="legend-pct">{{ ((mpb.not_started / mpb_total) * 100)|round(1) }}%</span>
+              <span class="legend-count">{{ mpb.not_started }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Scored -->
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Top Scored Manga</h3>
+          <span class="dash-card-badge">Best of {{ manga_stats.scored_count }}</span>
+        </div>
+        {% if manga_stats.top_scored %}
+        <div class="top-list">
+          {% for t in manga_stats.top_scored %}
+          <div class="top-item">
+            <span class="top-rank">#{{ loop.index }}</span>
+            {% if t.cover_url %}
+            <img class="top-cover" src="{{ t.cover_url }}" alt="">
+            {% else %}
+            <div class="top-cover-placeholder">?</div>
+            {% endif %}
+            <span class="top-title">{{ t.title }}</span>
+            <span class="top-score">★ {{ t.score }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="no-data">No scored manga yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Activity Timeline -->
+    <div class="dash-row" style="grid-template-columns: 1fr;">
+      <div class="dash-card">
+        <div class="dash-card-head">
+          <h3>Manga Added Over Time</h3>
+          <span class="dash-card-badge">Last 12 months</span>
+        </div>
+        <div class="timeline-chart">
+          {% set m_vals = manga_stats.activity_by_month.values()|list %}
+          {% set m_max = m_vals|max if m_vals|length > 0 and m_vals|max > 0 else 1 %}
+          {% for month, count in manga_stats.activity_by_month.items() %}
+          <div class="timeline-bar-wrap" title="{{ month }}: {{ count }} manga">
+            <div class="timeline-bar" style="height: {{ (count / m_max * 100)|round }}%; background: var(--accent-2);"></div>
+            <span class="timeline-label">{{ month[-2:] }}</span>
           </div>
           {% endfor %}
         </div>

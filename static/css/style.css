@@ -1126,10 +1126,74 @@ body {
 }
 .bar-count { width: 24px; font-size: 13px; font-weight: 600; }
 
+/* summary unit */
+.summary-unit {
+  font-size: 14px; font-weight: 400; color: var(--muted);
+  margin-left: 4px;
+}
+
+/* timeline chart */
+.timeline-chart {
+  display: flex; align-items: flex-end; gap: 6px;
+  height: 160px; padding-top: 8px;
+}
+.timeline-bar-wrap {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-end;
+  height: 100%; position: relative;
+}
+.timeline-bar {
+  width: 100%; min-height: 2px; border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+  transition: height .4s ease;
+}
+.timeline-bar-wrap:hover .timeline-bar {
+  filter: brightness(1.2);
+}
+.timeline-label {
+  font-size: 10px; color: var(--muted); margin-top: 6px;
+  text-align: center;
+}
+
+/* top scored list */
+.top-list {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.top-item {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 14px;
+  transition: border-color .2s;
+}
+.top-item:hover { border-color: var(--accent); }
+.top-rank {
+  font-size: 14px; font-weight: 700; color: var(--accent);
+  min-width: 28px; text-align: center;
+}
+.top-cover {
+  width: 36px; height: 50px; border-radius: 6px;
+  object-fit: cover; flex-shrink: 0;
+}
+.top-cover-placeholder {
+  width: 36px; height: 50px; border-radius: 6px;
+  background: var(--panel-2); display: flex; align-items: center;
+  justify-content: center; color: var(--muted); font-size: 18px;
+  flex-shrink: 0;
+}
+.top-title {
+  flex: 1; font-size: 14px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.top-score {
+  font-size: 14px; font-weight: 700; color: #fbbf24;
+  flex-shrink: 0;
+}
+
 @media (max-width: 720px) {
   .dash-row { grid-template-columns: 1fr; }
   .pie-area { flex-direction: column; align-items: flex-start; }
   .dash-summary { grid-template-columns: 1fr 1fr; }
+  .timeline-chart { height: 120px; }
 }
 
 /* ---------- profile settings revamp ---------- */
