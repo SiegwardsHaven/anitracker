@@ -1175,6 +1175,19 @@ body {
 .legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .legend-name { flex: 1; color: var(--muted); }
+.legend-pct { font-size: 12px; color: var(--text); font-weight: 600; }
+.legend-item { cursor: pointer; padding: 3px 6px; border-radius: 6px; transition: background .2s; }
+.legend-item:hover { background: rgba(255,255,255,.06); }
+
+/* chart tooltip */
+.chart-tooltip {
+  display: none; position: fixed; z-index: 9999;
+  background: rgba(20,20,27,.95); border: 1px solid var(--line);
+  color: var(--text); padding: 10px 14px; border-radius: 10px;
+  font-size: 13px; line-height: 1.5; pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  backdrop-filter: blur(8px); max-width: 220px;
+}
 
 /* vertical bar chart */
 .vbar-chart {
@@ -1196,8 +1209,14 @@ body {
 .vbar-fill {
   width: 100%; border-radius: 4px 4px 0 0;
   background: linear-gradient(180deg, var(--accent), var(--accent-2));
-  transition: height .4s ease; min-height: 2px;
+  min-height: 2px;
+  transform: scaleY(0); transform-origin: bottom;
+  transition: transform .6s cubic-bezier(.34,1.56,.64,1), filter .2s;
 }
+.vbar-chart.loaded .vbar-fill { transform: scaleY(1); }
+.vbar-col { cursor: pointer; }
+.vbar-col:hover .vbar-fill { filter: brightness(1.35); }
+.vbar-col:hover .vbar-val { color: var(--text); }
 .vbar-label {
   font-size: 11px; color: var(--muted); margin-top: 6px;
   font-weight: 600;
@@ -1257,6 +1276,7 @@ body {
   min-width: 36px; height: 36px; font-size: 14px; font-weight: 600;
   cursor: pointer; transition: .2s;
   display: flex; align-items: center; justify-content: center;
+  text-decoration: none;
 }
 .page-btn:hover:not(.disabled):not(.active) {
   border-color: var(--accent); color: var(--accent);

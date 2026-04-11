@@ -109,27 +109,38 @@ def _title_matches(item: dict, query: str) -> bool:
 def _search_with_filter(endpoint: str, query: str, *, genres: str = "",
                         min_score: str = "", status: str = "", type_: str = "",
                         order_by: str = "members", sort: str = "desc",
-                        max_pages: int = 4) -> dict:
-    """Fetch up to max_pages API pages and collect all title-matched results.
+                        max_pages: int = 4, page: int = 1) -> dict:
+    """Search with optional server-side pagination.
 
-    Because Jikan does loose word matching, a query like "My Dress-Up Darling"
-    may scatter relevant entries (Season 1, Season 2, …) across multiple pages
-    filled with unrelated titles.  This helper aggregates them.
-    Filter-only searches (no text) use more pages for comprehensive coverage.
+    Filter-only searches (no text query) use server-side pagination:
+    each UI page maps to exactly one Jikan API page (25 results), so
+    browsing hundreds of results only costs one API call per page.
+
+    Text searches still aggregate across multiple Jikan pages because
+    title matching can scatter relevant results across pages.
     """
+    params_base: dict = {
+        "limit": 25,
+        "order_by": order_by, "sort": sort,
+        "sfw": "true",
+    }
+    if genres:    params_base["genres"] = genres
+    if min_score: params_base["min_score"] = min_score
+    if status:    params_base["status"] = status
+    if type_:     params_base["type"] = type_
+
+    # ── Filter-only: pass-through Jikan pagination (1 call per page) ──
+    if not query:
+        params_base["page"] = page
+        resp = jikan_get(endpoint, params_base)
+        return {"data": resp.get("data", []), "pagination": resp.get("pagination", {})}
+
+    # ── Text query: multi-page aggregation for title matching ──
     all_matched: list[dict] = []
     seen_ids: set[int] = set()
 
     for pg in range(1, max_pages + 1):
-        params = {
-            "q": query, "limit": 25, "page": pg,
-            "order_by": order_by, "sort": sort,
-            "sfw": "true",
-        }
-        if genres:    params["genres"] = genres
-        if min_score: params["min_score"] = min_score
-        if status:    params["status"] = status
-        if type_:     params["type"] = type_
+        params = {**params_base, "q": query, "page": pg}
 
         resp = jikan_get(endpoint, params)
         page_data = resp.get("data", [])
@@ -140,7 +151,7 @@ def _search_with_filter(endpoint: str, query: str, *, genres: str = "",
             if mid in seen_ids:
                 continue
             seen_ids.add(mid)
-            if not query or _title_matches(item, query):
+            if _title_matches(item, query):
                 all_matched.append(item)
 
         # stop early if the API has no more pages
@@ -152,23 +163,22 @@ def _search_with_filter(endpoint: str, query: str, *, genres: str = "",
 
 def search_anime(query: str, *, genres: str = "", min_score: str = "",
                  status: str = "", type_: str = "", order_by: str = "members",
-                 sort: str = "desc", **_kw) -> dict:
-    # Filter-only (no text query) fetches more pages for full coverage
-    pages = 3 if query else 6
+                 sort: str = "desc", page: int = 1, **_kw) -> dict:
+    pages = 3 if query else 1
     return _search_with_filter("/anime", query, genres=genres,
                                min_score=min_score, status=status,
                                type_=type_, order_by=order_by, sort=sort,
-                               max_pages=pages)
+                               max_pages=pages, page=page)
 
 
 def search_manga(query: str, *, genres: str = "", min_score: str = "",
                  status: str = "", type_: str = "", order_by: str = "members",
-                 sort: str = "desc", **_kw) -> dict:
-    pages = 3 if query else 6
+                 sort: str = "desc", page: int = 1, **_kw) -> dict:
+    pages = 3 if query else 1
     return _search_with_filter("/manga", query, genres=genres,
                                min_score=min_score, status=status,
                                type_=type_, order_by=order_by, sort=sort,
-                               max_pages=pages)
+                               max_pages=pages, page=page)
 
 
 def get_anime(mal_id: int) -> dict:

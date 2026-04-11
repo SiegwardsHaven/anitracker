@@ -3,6 +3,9 @@
 {% block content %}
 
 <div class="dash">
+  <!-- shared chart tooltip -->
+  <div class="chart-tooltip" id="chartTooltip"></div>
+
   <!-- ───── Header ───── -->
   <div class="dash-header">
     <div class="dash-header-left">
@@ -44,29 +47,21 @@
 
   <!-- ═══════ GENRE DISTRIBUTION + SCORE DISTRIBUTION ═══════ -->
   <div class="dash-row">
-    <!-- Genre distribution donut -->
+    <!-- Genre distribution donut (Canvas) -->
     <div class="dash-card">
       <div class="dash-card-head">
         <h3>Genre distribution</h3>
       </div>
-      <p class="card-hint">Click a slice to filter</p>
+      <p class="card-hint">Hover slices for details</p>
       {% if genre_labels %}
       <div class="pie-area">
-        <div class="donut-chart" id="genreDonut" style="background: conic-gradient(
-          {% set ns = namespace(offset=0) %}
+        <canvas id="genreDonut" width="200" height="200"></canvas>
+        <div class="chart-legend" id="genreLegend">
           {% for i in range(genre_labels|length) %}
-            {{ genre_colors[i] }} {{ ns.offset }}deg {{ ns.offset + (genre_values[i] / genre_total * 360) }}deg
-            {% set ns.offset = ns.offset + (genre_values[i] / genre_total * 360) %}
-            {% if not loop.last %},{% endif %}
-          {% endfor %}
-        );">
-          <div class="donut-hole"></div>
-        </div>
-        <div class="chart-legend">
-          {% for i in range(genre_labels|length) %}
-          <div class="legend-item">
+          <div class="legend-item" data-index="{{ i }}">
             <span class="legend-dot" style="background: {{ genre_colors[i] }}"></span>
             <span class="legend-name">{{ genre_labels[i] }}</span>
+            <span class="legend-pct">{{ ((genre_values[i] / genre_total) * 100)|round(1) }}%</span>
           </div>
           {% endfor %}
         </div>
@@ -81,12 +76,12 @@
       <div class="dash-card-head">
         <h3>Score distribution</h3>
       </div>
-      <p class="card-hint">How you rate titles 1–10</p>
+      <p class="card-hint">Hover bars for counts</p>
       <div class="vbar-chart" id="scoreChart">
         {% set max_sc = score_dist.values()|max if score_dist.values()|max > 0 else 1 %}
         {% for i in range(1, 11) %}
         {% set cnt = score_dist.get(i|string, 0) %}
-        <div class="vbar-col">
+        <div class="vbar-col" data-score="{{ i }}" data-count="{{ cnt }}">
           <span class="vbar-val">{{ cnt }}</span>
           <div class="vbar-track">
             <div class="vbar-fill" style="height: {{ (cnt / max_sc * 100)|round }}%;"></div>
@@ -105,7 +100,7 @@
       <div class="dash-card-head">
         <h3>Watch activity (12mo)</h3>
       </div>
-      <p class="card-hint">Episodes vs chapters</p>
+      <p class="card-hint">Hover points for details</p>
       <canvas id="activityChart" height="220"></canvas>
       <div class="chart-legend-inline">
         <span class="legend-inline"><span class="legend-line" style="background: #3b82f6;"></span> Episodes</span>
@@ -118,7 +113,7 @@
       <div class="dash-card-head">
         <h3>Taste profile</h3>
       </div>
-      <p class="card-hint">Avg rating by genre</p>
+      <p class="card-hint">Hover vertices for scores</p>
       {% if taste_labels %}
       <canvas id="radarChart" height="260"></canvas>
       {% else %}
@@ -165,75 +160,240 @@
 
 <script>
 (function(){
-  /* ── Activity line chart (Canvas) ── */
+  /* ──────────── Shared Tooltip ──────────── */
+  var tip = document.getElementById('chartTooltip');
+  function showTip(ev, html) {
+    tip.innerHTML = html;
+    tip.style.display = 'block';
+    var x = ev.clientX + 14, y = ev.clientY - 10;
+    if (x + tip.offsetWidth > window.innerWidth - 12) x = ev.clientX - tip.offsetWidth - 14;
+    if (y + tip.offsetHeight > window.innerHeight - 12) y = ev.clientY - tip.offsetHeight + 10;
+    tip.style.left = x + 'px';
+    tip.style.top = y + 'px';
+  }
+  function hideTip() { tip.style.display = 'none'; }
+
+  var PANEL = getComputedStyle(document.documentElement).getPropertyValue('--panel').trim() || '#14141b';
+
+  /* ──────────── Genre Donut (Canvas) ──────────── */
+  var donutEl = document.getElementById('genreDonut');
+  if (donutEl) {
+    var dc = donutEl.getContext('2d');
+    var gLabels = {{ genre_labels|tojson }};
+    var gValues = {{ genre_values|tojson }};
+    var gColors = {{ genre_colors|tojson }};
+    var gTotal  = gValues.reduce(function(a,b){ return a+b; }, 0) || 1;
+    var hovSlice = -1, animP = 0;
+    var dW, dH, dCx, dCy, outerR, innerR;
+
+    function sizeDonut() {
+      var w = Math.min(200, donutEl.parentElement.clientWidth - 40);
+      dW = donutEl.width = w; dH = donutEl.height = w;
+      dCx = dW / 2; dCy = dH / 2;
+      outerR = dW / 2 - 12; innerR = outerR * 0.58;
+    }
+    sizeDonut();
+
+    function drawDonut(prog) {
+      dc.clearRect(0, 0, dW, dH);
+      var start = -Math.PI / 2;
+      for (var i = 0; i < gLabels.length; i++) {
+        var sweep = (gValues[i] / gTotal) * 2 * Math.PI * prog;
+        var end = start + sweep;
+        var r = outerR + (i === hovSlice ? 8 : 0);
+        var gap = 0.02;
+        dc.save();
+        if (i === hovSlice) { dc.shadowColor = gColors[i]; dc.shadowBlur = 16; }
+        dc.beginPath();
+        dc.arc(dCx, dCy, r, start + gap, end - gap);
+        dc.arc(dCx, dCy, innerR, end - gap, start + gap, true);
+        dc.closePath();
+        dc.fillStyle = gColors[i];
+        dc.fill();
+        dc.restore();
+        start = end;
+      }
+      /* inner hole */
+      dc.beginPath(); dc.arc(dCx, dCy, innerR - 1, 0, 2 * Math.PI);
+      dc.fillStyle = PANEL; dc.fill();
+      /* center text on hover */
+      if (hovSlice >= 0 && prog >= 1) {
+        var pct = ((gValues[hovSlice] / gTotal) * 100).toFixed(1);
+        dc.fillStyle = '#fff'; dc.font = 'bold 22px sans-serif'; dc.textAlign = 'center';
+        dc.fillText(pct + '%', dCx, dCy + 4);
+        dc.fillStyle = 'rgba(255,255,255,.45)'; dc.font = '10px sans-serif';
+        dc.fillText(gLabels[hovSlice], dCx, dCy + 20);
+      }
+    }
+
+    /* entrance animation */
+    (function anim() {
+      animP += 0.025;
+      if (animP > 1) animP = 1;
+      drawDonut(animP);
+      if (animP < 1) requestAnimationFrame(anim);
+    })();
+
+    /* hover detection */
+    donutEl.addEventListener('mousemove', function(e) {
+      var rect = donutEl.getBoundingClientRect();
+      var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      var dx = mx - dCx, dy = my - dCy;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist >= innerR && dist <= outerR + 10) {
+        var angle = Math.atan2(dy, dx) + Math.PI / 2;
+        if (angle < 0) angle += 2 * Math.PI;
+        var cum = 0, found = -1;
+        for (var i = 0; i < gValues.length; i++) {
+          cum += (gValues[i] / gTotal) * 2 * Math.PI;
+          if (angle <= cum) { found = i; break; }
+        }
+        if (found !== hovSlice) { hovSlice = found; drawDonut(1); }
+        if (found >= 0) {
+          var pct = ((gValues[found] / gTotal) * 100).toFixed(1);
+          showTip(e, '<strong>' + gLabels[found] + '</strong><br>' + gValues[found] + ' titles &middot; ' + pct + '%');
+          donutEl.style.cursor = 'pointer';
+        }
+      } else {
+        if (hovSlice !== -1) { hovSlice = -1; drawDonut(1); }
+        hideTip(); donutEl.style.cursor = 'default';
+      }
+    });
+    donutEl.addEventListener('mouseleave', function() {
+      hovSlice = -1; drawDonut(1); hideTip();
+    });
+
+    /* legend ↔ donut hover sync */
+    document.querySelectorAll('#genreLegend .legend-item[data-index]').forEach(function(el) {
+      el.addEventListener('mouseenter', function() {
+        hovSlice = parseInt(this.dataset.index);
+        drawDonut(1);
+      });
+      el.addEventListener('mouseleave', function() {
+        hovSlice = -1; drawDonut(1);
+      });
+    });
+  }
+
+  /* ──────────── Score Bar Hover ──────────── */
+  var barChart = document.getElementById('scoreChart');
+  if (barChart) {
+    /* animate bars in on load */
+    setTimeout(function(){ barChart.classList.add('loaded'); }, 60);
+
+    barChart.querySelectorAll('.vbar-col[data-score]').forEach(function(col) {
+      col.addEventListener('mouseenter', function(e) {
+        this.querySelector('.vbar-fill').style.filter = 'brightness(1.35)';
+        showTip(e, '<strong>Score ' + this.dataset.score + '</strong><br>' + this.dataset.count + ' titles');
+      });
+      col.addEventListener('mousemove', function(e) {
+        showTip(e, '<strong>Score ' + this.dataset.score + '</strong><br>' + this.dataset.count + ' titles');
+      });
+      col.addEventListener('mouseleave', function() {
+        this.querySelector('.vbar-fill').style.filter = '';
+        hideTip();
+      });
+    });
+  }
+
+  /* ──────────── Activity Line Chart (Canvas) ──────────── */
   var canvas = document.getElementById('activityChart');
   if (canvas) {
     var ctx = canvas.getContext('2d');
     var W = canvas.width = canvas.parentElement.clientWidth - 48;
     var H = canvas.height = 200;
-    var labels = {{ month_labels|tojson }};
+    var mLabels = {{ month_labels|tojson }};
     var ep = {{ anime_activity|tojson }};
     var ch = {{ manga_activity|tojson }};
     var maxVal = Math.max(1, Math.max.apply(null, ep.concat(ch)));
     var padL = 36, padR = 10, padT = 16, padB = 28;
     var plotW = W - padL - padR;
     var plotH = H - padT - padB;
+    var hovIdx = -1;
 
-    function xp(i) { return padL + (i / (labels.length - 1)) * plotW; }
+    function xp(i) { return padL + (i / (mLabels.length - 1)) * plotW; }
     function yp(v) { return padT + plotH - (v / maxVal) * plotH; }
 
-    /* grid lines */
-    ctx.strokeStyle = 'rgba(255,255,255,.08)';
-    ctx.lineWidth = 1;
-    for (var g = 0; g <= 5; g++) {
-      var gy = padT + (g / 5) * plotH;
-      ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(W - padR, gy); ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,.35)';
-      ctx.font = '10px sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(Math.round(maxVal - (g / 5) * maxVal), padL - 6, gy + 4);
-    }
-
-    /* x labels */
-    ctx.fillStyle = 'rgba(255,255,255,.45)';
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center';
-    for (var j = 0; j < labels.length; j++) {
-      ctx.fillText(labels[j], xp(j), H - 6);
-    }
-
-    /* episodes line (solid blue) */
-    ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    for (var i = 0; i < ep.length; i++) {
-      if (i === 0) ctx.moveTo(xp(i), yp(ep[i]));
-      else ctx.lineTo(xp(i), yp(ep[i]));
-    }
-    ctx.stroke();
-
-    /* chapters line (dashed green) */
-    ctx.strokeStyle = '#34d399'; ctx.lineWidth = 2.5;
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    for (var i = 0; i < ch.length; i++) {
-      if (i === 0) ctx.moveTo(xp(i), yp(ch[i]));
-      else ctx.lineTo(xp(i), yp(ch[i]));
-    }
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    /* dots */
-    function dots(arr, color) {
-      ctx.fillStyle = color;
-      for (var i = 0; i < arr.length; i++) {
-        ctx.beginPath(); ctx.arc(xp(i), yp(arr[i]), 4, 0, 6.28); ctx.fill();
+    function drawLine() {
+      ctx.clearRect(0, 0, W, H);
+      /* grid lines */
+      for (var g = 0; g <= 5; g++) {
+        var gy = padT + (g / 5) * plotH;
+        ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(W - padR, gy); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+        ctx.fillText(Math.round(maxVal - (g / 5) * maxVal), padL - 6, gy + 4);
+      }
+      /* x labels */
+      ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+      for (var j = 0; j < mLabels.length; j++) {
+        ctx.fillText(mLabels[j], xp(j), H - 6);
+        /* highlight column on hover */
+        if (j === hovIdx) {
+          ctx.fillStyle = 'rgba(255,255,255,.04)';
+          ctx.fillRect(xp(j) - plotW / mLabels.length / 2, padT, plotW / mLabels.length, plotH);
+          ctx.fillStyle = 'rgba(255,255,255,.45)';
+        }
+      }
+      /* hover crosshair */
+      if (hovIdx >= 0) {
+        ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+        ctx.beginPath(); ctx.moveTo(xp(hovIdx), padT); ctx.lineTo(xp(hovIdx), padT + plotH); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      /* episodes line (solid blue) */
+      ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+      ctx.beginPath();
+      for (var i = 0; i < ep.length; i++) { i === 0 ? ctx.moveTo(xp(i), yp(ep[i])) : ctx.lineTo(xp(i), yp(ep[i])); }
+      ctx.stroke();
+      /* area fill under episodes */
+      ctx.fillStyle = 'rgba(59,130,246,.08)';
+      ctx.beginPath();
+      ctx.moveTo(xp(0), yp(0));
+      for (var i = 0; i < ep.length; i++) ctx.lineTo(xp(i), yp(ep[i]));
+      ctx.lineTo(xp(ep.length - 1), yp(0)); ctx.closePath(); ctx.fill();
+      /* chapters line (dashed green) */
+      ctx.strokeStyle = '#34d399'; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      for (var i = 0; i < ch.length; i++) { i === 0 ? ctx.moveTo(xp(i), yp(ch[i])) : ctx.lineTo(xp(i), yp(ch[i])); }
+      ctx.stroke(); ctx.setLineDash([]);
+      /* dots */
+      for (var i = 0; i < ep.length; i++) {
+        var r = (i === hovIdx) ? 7 : 4;
+        ctx.fillStyle = '#3b82f6';
+        if (i === hovIdx) { ctx.shadowColor = '#3b82f6'; ctx.shadowBlur = 10; }
+        ctx.beginPath(); ctx.arc(xp(i), yp(ep[i]), r, 0, 6.28); ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+      for (var i = 0; i < ch.length; i++) {
+        var r = (i === hovIdx) ? 7 : 4;
+        ctx.fillStyle = '#34d399';
+        if (i === hovIdx) { ctx.shadowColor = '#34d399'; ctx.shadowBlur = 10; }
+        ctx.beginPath(); ctx.arc(xp(i), yp(ch[i]), r, 0, 6.28); ctx.fill();
+        ctx.shadowBlur = 0;
       }
     }
-    dots(ep, '#3b82f6');
-    dots(ch, '#34d399');
+    drawLine();
+
+    canvas.addEventListener('mousemove', function(e) {
+      var rect = canvas.getBoundingClientRect();
+      var mx = e.clientX - rect.left;
+      var closest = -1, minD = Infinity;
+      for (var i = 0; i < mLabels.length; i++) {
+        var d = Math.abs(mx - xp(i));
+        if (d < minD) { minD = d; closest = i; }
+      }
+      if (minD < 30 && closest !== hovIdx) { hovIdx = closest; drawLine(); }
+      else if (minD >= 30 && hovIdx !== -1) { hovIdx = -1; drawLine(); }
+      if (hovIdx >= 0) {
+        showTip(e, '<strong>' + mLabels[hovIdx] + '</strong><br>Episodes: ' + ep[hovIdx] + '<br>Chapters: ' + ch[hovIdx]);
+        canvas.style.cursor = 'crosshair';
+      } else { hideTip(); canvas.style.cursor = 'default'; }
+    });
+    canvas.addEventListener('mouseleave', function() { hovIdx = -1; drawLine(); hideTip(); });
   }
 
-  /* ── Radar / taste profile chart (Canvas) ── */
+  /* ──────────── Radar / Taste Profile (Canvas) ──────────── */
   var radar = document.getElementById('radarChart');
   if (radar) {
     var rc = radar.getContext('2d');
@@ -247,79 +407,92 @@
       var n = rLabels.length;
       var maxR = 10;
       var step = (2 * Math.PI) / n;
+      var hovVtx = -1;
 
-      /* grid rings */
-      for (var ring = 1; ring <= 5; ring++) {
-        var rr = radius * (ring / 5);
-        rc.strokeStyle = 'rgba(255,255,255,.08)';
-        rc.lineWidth = 1;
+      function drawRadar() {
+        rc.clearRect(0, 0, rW, rH);
+        /* grid rings */
+        for (var ring = 1; ring <= 5; ring++) {
+          var rr = radius * (ring / 5);
+          rc.strokeStyle = 'rgba(255,255,255,.08)'; rc.lineWidth = 1;
+          rc.beginPath();
+          for (var k = 0; k < n; k++) {
+            var a = -Math.PI / 2 + k * step;
+            var px = cx + rr * Math.cos(a), py = cy + rr * Math.sin(a);
+            k === 0 ? rc.moveTo(px, py) : rc.lineTo(px, py);
+          }
+          rc.closePath(); rc.stroke();
+          rc.fillStyle = 'rgba(255,255,255,.25)'; rc.font = '9px sans-serif'; rc.textAlign = 'center';
+          rc.fillText(Math.round(maxR * ring / 5), cx + 2, cy - rr + 12);
+        }
+        /* axis lines */
+        rc.strokeStyle = 'rgba(255,255,255,.1)'; rc.lineWidth = 1;
+        for (var k = 0; k < n; k++) {
+          var a = -Math.PI / 2 + k * step;
+          rc.beginPath(); rc.moveTo(cx, cy);
+          rc.lineTo(cx + radius * Math.cos(a), cy + radius * Math.sin(a)); rc.stroke();
+        }
+        /* data polygon */
+        rc.fillStyle = 'rgba(249,115,22,.18)'; rc.strokeStyle = '#f97316'; rc.lineWidth = 2.5;
         rc.beginPath();
         for (var k = 0; k < n; k++) {
           var a = -Math.PI / 2 + k * step;
-          var px = cx + rr * Math.cos(a);
-          var py = cy + rr * Math.sin(a);
-          if (k === 0) rc.moveTo(px, py);
-          else rc.lineTo(px, py);
+          var vr = (rValues[k] / maxR) * radius;
+          var px = cx + vr * Math.cos(a), py = cy + vr * Math.sin(a);
+          k === 0 ? rc.moveTo(px, py) : rc.lineTo(px, py);
         }
-        rc.closePath(); rc.stroke();
-        /* ring label */
-        rc.fillStyle = 'rgba(255,255,255,.25)';
-        rc.font = '9px sans-serif';
-        rc.textAlign = 'center';
-        rc.fillText(Math.round(maxR * ring / 5), cx + 2, cy - rr + 12);
+        rc.closePath(); rc.fill(); rc.stroke();
+        /* dots + value labels */
+        for (var k = 0; k < n; k++) {
+          var a = -Math.PI / 2 + k * step;
+          var vr = (rValues[k] / maxR) * radius;
+          var px = cx + vr * Math.cos(a), py = cy + vr * Math.sin(a);
+          var dotR = (k === hovVtx) ? 8 : 4;
+          rc.save();
+          if (k === hovVtx) { rc.shadowColor = '#f97316'; rc.shadowBlur = 14; }
+          rc.fillStyle = (k === hovVtx) ? '#fff' : '#f97316';
+          rc.beginPath(); rc.arc(px, py, dotR, 0, 6.28); rc.fill();
+          rc.restore();
+          if (k === hovVtx) {
+            rc.strokeStyle = '#f97316'; rc.lineWidth = 2;
+            rc.beginPath(); rc.arc(px, py, dotR, 0, 6.28); rc.stroke();
+          }
+          rc.fillStyle = 'rgba(255,255,255,.85)'; rc.font = 'bold 10px sans-serif'; rc.textAlign = 'center';
+          rc.fillText(rValues[k], px, py - (k === hovVtx ? 14 : 8));
+        }
+        /* axis labels */
+        rc.fillStyle = 'rgba(255,255,255,.7)'; rc.font = '12px sans-serif';
+        for (var k = 0; k < n; k++) {
+          var a = -Math.PI / 2 + k * step;
+          var lx = cx + (radius + 24) * Math.cos(a);
+          var ly = cy + (radius + 24) * Math.sin(a);
+          rc.textAlign = 'center';
+          if (Math.cos(a) > 0.3) rc.textAlign = 'left';
+          else if (Math.cos(a) < -0.3) rc.textAlign = 'right';
+          rc.fillText(rLabels[k], lx, ly + 4);
+        }
       }
+      drawRadar();
 
-      /* axis lines */
-      rc.strokeStyle = 'rgba(255,255,255,.1)'; rc.lineWidth = 1;
-      for (var k = 0; k < n; k++) {
-        var a = -Math.PI / 2 + k * step;
-        rc.beginPath(); rc.moveTo(cx, cy);
-        rc.lineTo(cx + radius * Math.cos(a), cy + radius * Math.sin(a));
-        rc.stroke();
-      }
-
-      /* data polygon */
-      rc.fillStyle = 'rgba(249,115,22,.18)';
-      rc.strokeStyle = '#f97316'; rc.lineWidth = 2.5;
-      rc.beginPath();
-      for (var k = 0; k < n; k++) {
-        var a = -Math.PI / 2 + k * step;
-        var vr = (rValues[k] / maxR) * radius;
-        var px = cx + vr * Math.cos(a);
-        var py = cy + vr * Math.sin(a);
-        if (k === 0) rc.moveTo(px, py);
-        else rc.lineTo(px, py);
-      }
-      rc.closePath(); rc.fill(); rc.stroke();
-
-      /* data dots + values */
-      rc.fillStyle = '#f97316';
-      for (var k = 0; k < n; k++) {
-        var a = -Math.PI / 2 + k * step;
-        var vr = (rValues[k] / maxR) * radius;
-        var px = cx + vr * Math.cos(a);
-        var py = cy + vr * Math.sin(a);
-        rc.beginPath(); rc.arc(px, py, 4, 0, 6.28); rc.fill();
-        /* value label on dot */
-        rc.fillStyle = 'rgba(255,255,255,.85)';
-        rc.font = 'bold 10px sans-serif';
-        rc.textAlign = 'center';
-        rc.fillText(rValues[k], px, py - 8);
-        rc.fillStyle = '#f97316';
-      }
-
-      /* axis labels */
-      rc.fillStyle = 'rgba(255,255,255,.7)';
-      rc.font = '12px sans-serif';
-      for (var k = 0; k < n; k++) {
-        var a = -Math.PI / 2 + k * step;
-        var lx = cx + (radius + 24) * Math.cos(a);
-        var ly = cy + (radius + 24) * Math.sin(a);
-        rc.textAlign = 'center';
-        if (Math.cos(a) > 0.3) rc.textAlign = 'left';
-        else if (Math.cos(a) < -0.3) rc.textAlign = 'right';
-        rc.fillText(rLabels[k], lx, ly + 4);
-      }
+      radar.addEventListener('mousemove', function(e) {
+        var rect = radar.getBoundingClientRect();
+        var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        var closest = -1, minD = Infinity;
+        for (var k = 0; k < n; k++) {
+          var a = -Math.PI / 2 + k * step;
+          var vr = (rValues[k] / maxR) * radius;
+          var px = cx + vr * Math.cos(a), py = cy + vr * Math.sin(a);
+          var d = Math.sqrt((mx - px) * (mx - px) + (my - py) * (my - py));
+          if (d < minD) { minD = d; closest = k; }
+        }
+        if (minD < 24 && closest !== hovVtx) { hovVtx = closest; drawRadar(); }
+        else if (minD >= 24 && hovVtx !== -1) { hovVtx = -1; drawRadar(); }
+        if (hovVtx >= 0) {
+          showTip(e, '<strong>' + rLabels[hovVtx] + '</strong><br>Avg score: ' + rValues[hovVtx] + ' / 10');
+          radar.style.cursor = 'pointer';
+        } else { hideTip(); radar.style.cursor = 'default'; }
+      });
+      radar.addEventListener('mouseleave', function() { hovVtx = -1; drawRadar(); hideTip(); });
     }
   }
 })();

@@ -216,6 +216,7 @@ def search():
     type_    = request.args.get("type", "")
     order_by = request.args.get("order_by", "members")
     sort     = request.args.get("sort", "desc")
+    page     = max(1, int(request.args.get("page", 1)))
 
     try:
         genres_list = api.get_genres(kind)
@@ -230,20 +231,23 @@ def search():
         pass
 
     results = []
+    pagination = {}
     if q or genres or min_score or status or type_:
         try:
             if kind == "manga":
                 resp = api.search_manga(
                     q, genres=genres, min_score=min_score, status=status,
-                    type_=type_, order_by=order_by, sort=sort)
+                    type_=type_, order_by=order_by, sort=sort, page=page)
             else:
                 resp = api.search_anime(
                     q, genres=genres, min_score=min_score, status=status,
-                    type_=type_, order_by=order_by, sort=sort)
+                    type_=type_, order_by=order_by, sort=sort, page=page)
             results = resp["data"]
+            pagination = resp.get("pagination", {})
         except Exception as e:
             return render_template("search.html", error=str(e),
-                                   results=[], kind=kind, genres_list=genres_list, carousel=carousel)
+                                   results=[], kind=kind, genres_list=genres_list, carousel=carousel,
+                                   page=1, pagination={})
 
     return render_template(
         "search.html",
@@ -251,6 +255,7 @@ def search():
         selected_genres=genres, min_score=min_score,
         status=status, type_=type_, order_by=order_by, sort=sort,
         genres_list=genres_list, carousel=carousel,
+        page=page, pagination=pagination,
     )
 
 
