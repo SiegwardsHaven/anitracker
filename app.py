@@ -216,32 +216,33 @@ def search():
     order_by = request.args.get("order_by", "members")
     sort     = request.args.get("sort", "desc")
 
-    results = []
-    if q or genres or min_score or status or type_:
-        try:
-            if kind == "manga":
-                results = api.search_manga(
-                    q, genres=genres, min_score=min_score, status=status,
-                    type_=type_, order_by=order_by, sort=sort)
-            else:
-                results = api.search_anime(
-                    q, genres=genres, min_score=min_score, status=status,
-                    type_=type_, order_by=order_by, sort=sort)
-        except Exception as e:
-            return render_template("search.html", error=str(e),
-                                   results=[], kind=kind, genres_list=[], carousel=[])
-
     try:
         genres_list = api.get_genres(kind)
     except Exception:
         genres_list = []
 
-    # Get carousel items
+    # Get carousel items (fetch BEFORE search to avoid rate-limit exhaustion)
     carousel = []
     try:
         carousel = api.get_top_rated_carousel(kind, limit=20)
     except Exception:
         pass
+
+    results = []
+    if q or genres or min_score or status or type_:
+        try:
+            if kind == "manga":
+                resp = api.search_manga(
+                    q, genres=genres, min_score=min_score, status=status,
+                    type_=type_, order_by=order_by, sort=sort)
+            else:
+                resp = api.search_anime(
+                    q, genres=genres, min_score=min_score, status=status,
+                    type_=type_, order_by=order_by, sort=sort)
+            results = resp["data"]
+        except Exception as e:
+            return render_template("search.html", error=str(e),
+                                   results=[], kind=kind, genres_list=genres_list, carousel=carousel)
 
     return render_template(
         "search.html",
@@ -255,12 +256,29 @@ def search():
 # ------------------------------------------------------------------
 # DETAIL PAGES (the "profile cards")
 # ------------------------------------------------------------------
+
+def _enrich_relations(data: dict):
+    """Fetch cover images and English titles for relation entries."""
+    if not data.get("relations"):
+        return
+    for rel in data["relations"]:
+        for item in rel.get("entry", []):
+            try:
+                brief = api.get_entry_brief(item["mal_id"], item["type"])
+                if brief:
+                    item["images"] = brief.get("images", {})
+                    item["title_english"] = brief.get("title_english") or ""
+            except Exception:
+                pass
+
+
 @app.route("/anime/<int:mal_id>")
 @login_required
 def anime_detail(mal_id):
     data = api.get_anime(mal_id)
     if not data:
         abort(404)
+    _enrich_relations(data)
     extras   = api.anilist_extras(mal_id, "ANIME")
     entry = db.get_anime_entry(current_user.id, mal_id)
     return render_template(
@@ -277,6 +295,7 @@ def manga_detail(mal_id):
     data = api.get_manga(mal_id)
     if not data:
         abort(404)
+    _enrich_relations(data)
     extras = api.anilist_extras(mal_id, "MANGA")
     entry = db.get_manga_entry(current_user.id, mal_id)
     return render_template(
@@ -643,6 +662,91 @@ def api_update_security_question():
         return jsonify(ok=False, error="Question and answer required"), 400
     auth_db.update_security_question(current_user.id, question, answer)
     return jsonify(ok=True)
+
+
+@app.post("/api/profile/verify-password")
+@login_required
+def api_verify_password():
+    p = request.get_json(force=True)
+    password = p.get("password", "")
+    if not password:
+        return jsonify(ok=False, error="Password required"), 400
+    if auth_db.verify_user_password(current_user.id, password):
+        session["settings_auth"] = True
+        return jsonify(ok=True)
+    return jsonify(ok=False, error="Incorrect password"), 401
+
+
+@app.post("/api/profile/change-password")
+@login_required
+def api_change_password():
+    if not session.get("settings_auth"):
+        return jsonify(ok=False, error="Authentication required"), 403
+    p = request.get_json(force=True)
+    current_pw = p.get("current_password", "")
+    new_pw = p.get("new_password", "")
+    confirm_pw = p.get("confirm_password", "")
+    if not current_pw or not new_pw:
+        return jsonify(ok=False, error="All fields are required"), 400
+    if new_pw != confirm_pw:
+        return jsonify(ok=False, error="Passwords do not match"), 400
+    if len(new_pw) < 8:
+        return jsonify(ok=False, error="Password must be at least 8 characters"), 400
+    if not auth_db.verify_user_password(current_user.id, current_pw):
+        return jsonify(ok=False, error="Current password is incorrect"), 401
+    auth_db.change_password(current_user.id, new_pw)
+    return jsonify(ok=True)
+
+
+@app.post("/api/profile/security-questions/add")
+@login_required
+def api_add_security_question():
+    if not session.get("settings_auth"):
+        return jsonify(ok=False, error="Authentication required"), 403
+    p = request.get_json(force=True)
+    question = p.get("question", "").strip()
+    answer = p.get("answer", "").strip()
+    if not question or not answer:
+        return jsonify(ok=False, error="Question and answer required"), 400
+    try:
+        auth_db.add_security_question(current_user.id, question, answer)
+        return jsonify(ok=True)
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+
+
+@app.post("/api/profile/security-questions/update")
+@login_required
+def api_update_security_question_at():
+    if not session.get("settings_auth"):
+        return jsonify(ok=False, error="Authentication required"), 403
+    p = request.get_json(force=True)
+    index = p.get("index")
+    question = p.get("question", "").strip()
+    answer = p.get("answer", "").strip()
+    if index is None or not question or not answer:
+        return jsonify(ok=False, error="Index, question and answer required"), 400
+    try:
+        auth_db.update_security_question_at(current_user.id, int(index), question, answer)
+        return jsonify(ok=True)
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+
+
+@app.post("/api/profile/security-questions/delete")
+@login_required
+def api_delete_security_question_at():
+    if not session.get("settings_auth"):
+        return jsonify(ok=False, error="Authentication required"), 403
+    p = request.get_json(force=True)
+    index = p.get("index")
+    if index is None:
+        return jsonify(ok=False, error="Index required"), 400
+    try:
+        auth_db.delete_security_question_at(current_user.id, int(index))
+        return jsonify(ok=True)
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
 
 
 @app.post("/api/profile/wipe-data")

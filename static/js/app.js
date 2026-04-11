@@ -59,10 +59,21 @@ function switchTab(tabName) {
 function toggleSynopsis() {
   const shortText = document.getElementById('synopsis-text');
   const fullText = document.getElementById('synopsis-full');
+  const readLess = document.getElementById('read-less-btn');
   
   if (shortText && fullText) {
-    shortText.classList.toggle('hidden');
-    fullText.classList.toggle('hidden');
+    const showing = !fullText.classList.contains('hidden');
+    if (showing) {
+      shortText.classList.remove('hidden');
+      fullText.classList.add('hidden');
+      if (shortText.nextElementSibling) shortText.nextElementSibling.classList.remove('hidden');
+      if (readLess) readLess.classList.add('hidden');
+    } else {
+      shortText.classList.add('hidden');
+      fullText.classList.remove('hidden');
+      if (shortText.nextElementSibling) shortText.nextElementSibling.classList.add('hidden');
+      if (readLess) readLess.classList.remove('hidden');
+    }
   }
 }
 

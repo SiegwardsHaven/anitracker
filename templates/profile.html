@@ -22,58 +22,118 @@
   <!-- ───── Account Settings ───── -->
   <h2 class="profile-section-title">Account Settings</h2>
 
-  <!-- Security Question -->
-  <div class="settings-card">
-    <h3><svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Security Question</h3>
-    {% if profile.has_security_question %}
-      <div class="sq-current">
-        <div class="sq-row">
-          <span class="sq-label">Question</span>
-          <span class="sq-value">{{ profile.security_question }}</span>
-        </div>
-        <div class="sq-row">
-          <span class="sq-label">Answer</span>
-          <span class="sq-value sq-masked">*****</span>
-        </div>
-      </div>
-    {% else %}
-      <p class="settings-warn">No security question set — you won't be able to reset your password.</p>
-    {% endif %}
-    <details class="sq-update">
-      <summary>{{ 'Update' if profile.has_security_question else 'Set' }} Security Question</summary>
-      <div class="sq-form">
-        <div class="form-group">
-          <label for="sq-select">Question</label>
-          <select id="sq-select">
-            <option value="">Choose a security question...</option>
-            <option value="What was your first pet's name?">What was your first pet's name?</option>
-            <option value="What city were you born in?">What city were you born in?</option>
-            <option value="What is your mother's maiden name?">What is your mother's maiden name?</option>
-            <option value="What was your favorite anime as a child?">What was your favorite anime as a child?</option>
-            <option value="What is your favorite manga character?">What is your favorite manga character?</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="sq-answer">Answer</label>
-          <input type="text" id="sq-answer" placeholder="Enter your answer">
-        </div>
-        <button class="btn primary" onclick="saveSecurityQuestion()">Save Security Question</button>
-      </div>
-    </details>
+  <!-- Password Gate -->
+  <div class="settings-card" id="authGate">
+    <h3><svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Authenticate to Manage Settings</h3>
+    <p class="settings-desc">Enter your password to view and manage your security questions and account settings.</p>
+    <div class="form-group">
+      <label for="gate-password">Password</label>
+      <input type="password" id="gate-password" placeholder="Enter your password" autocomplete="current-password">
+    </div>
+    <p class="settings-error" id="gate-error" style="display:none;"></p>
+    <button class="btn primary" onclick="authenticateSettings()">Unlock Settings</button>
   </div>
 
-  <!-- Data Wipe -->
-  <div class="settings-card">
-    <h3><svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> Wipe All Data</h3>
-    <p class="settings-desc">Remove all anime and manga list entries. Your account and settings will be kept.</p>
-    <button class="btn danger" onclick="openConfirmModal('wipe')">Wipe All Anime &amp; Manga Data</button>
-  </div>
+  <!-- Authenticated Settings (hidden until password verified) -->
+  <div id="authSettings" style="display:none;">
 
-  <!-- Account Deletion -->
-  <div class="settings-card">
-    <h3><svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Delete Account</h3>
-    <p class="settings-desc">Permanently delete your account and all associated data. This cannot be undone.</p>
-    <button class="btn danger" onclick="openConfirmModal('delete')">Delete My Account</button>
+    <!-- Change Password -->
+    <div class="settings-card">
+      <h3><svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg> Change Password</h3>
+      <div class="form-group">
+        <label for="cp-current">Current Password</label>
+        <input type="password" id="cp-current" placeholder="Current password" autocomplete="current-password">
+      </div>
+      <div class="form-group">
+        <label for="cp-new">New Password</label>
+        <input type="password" id="cp-new" placeholder="New password (min 8 characters)" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label for="cp-confirm">Confirm New Password</label>
+        <input type="password" id="cp-confirm" placeholder="Confirm new password" autocomplete="new-password">
+      </div>
+      <p class="settings-error" id="cp-error" style="display:none;"></p>
+      <p class="settings-success" id="cp-success" style="display:none;"></p>
+      <button class="btn primary" onclick="changePassword()">Update Password</button>
+    </div>
+
+    <!-- Security Questions -->
+    <div class="settings-card">
+      <h3><svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><circle cx="12" cy="12" r="10"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Security Questions</h3>
+      <p class="settings-desc">Set up to 3 security questions for account recovery. The first question is used for password resets.</p>
+
+      <div id="sq-list">
+        {% for sq in profile.security_questions_list %}
+        <div class="sq-entry" data-index="{{ sq.index }}">
+          <div class="sq-entry-header">
+            <span class="sq-entry-num">#{{ sq.index + 1 }}</span>
+            <span class="sq-entry-question">{{ sq.question }}</span>
+            <span class="sq-entry-answer">Answer: •••••</span>
+            <div class="sq-entry-actions">
+              <button class="sq-edit-btn" onclick="editSecurityQuestion({{ sq.index }})" title="Edit">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button class="sq-delete-btn" onclick="deleteSecurityQuestion({{ sq.index }})" title="Delete">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% if profile.security_questions_count < 3 %}
+      <div class="sq-add-form" id="sqAddForm">
+        <div class="sq-add-header" onclick="document.getElementById('sqAddForm').classList.toggle('expanded')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Security Question
+          <span class="sq-add-count">({{ profile.security_questions_count }}/3)</span>
+        </div>
+        <div class="sq-add-body">
+          <div class="form-group">
+            <label for="sq-new-question">Question</label>
+            <select id="sq-new-question">
+              <option value="">Choose a security question...</option>
+              <option value="What was your first pet's name?">What was your first pet's name?</option>
+              <option value="What city were you born in?">What city were you born in?</option>
+              <option value="What is your mother's maiden name?">What is your mother's maiden name?</option>
+              <option value="What was your favorite anime as a child?">What was your favorite anime as a child?</option>
+              <option value="What is your favorite manga character?">What is your favorite manga character?</option>
+              <option value="What was the name of your first school?">What was the name of your first school?</option>
+              <option value="What is the name of your favorite fictional character?">What is the name of your favorite fictional character?</option>
+              <option value="custom">Write your own question...</option>
+            </select>
+          </div>
+          <div class="form-group" id="sq-custom-group" style="display:none;">
+            <label for="sq-custom-question">Custom Question</label>
+            <input type="text" id="sq-custom-question" placeholder="Type your question...">
+          </div>
+          <div class="form-group">
+            <label for="sq-new-answer">Answer</label>
+            <input type="text" id="sq-new-answer" placeholder="Enter your answer">
+          </div>
+          <p class="settings-error" id="sq-error" style="display:none;"></p>
+          <button class="btn primary" onclick="addSecurityQuestion()">Save Question</button>
+        </div>
+      </div>
+      {% else %}
+      <p class="settings-desc" style="margin-top:12px; opacity:.7;">Maximum of 3 security questions reached.</p>
+      {% endif %}
+    </div>
+
+    <!-- Data Wipe -->
+    <div class="settings-card">
+      <h3><svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> Wipe All Data</h3>
+      <p class="settings-desc">Remove all anime and manga list entries. Your account and settings will be kept.</p>
+      <button class="btn danger" onclick="openConfirmModal('wipe')">Wipe All Anime &amp; Manga Data</button>
+    </div>
+
+    <!-- Account Deletion -->
+    <div class="settings-card">
+      <h3><svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Delete Account</h3>
+      <p class="settings-desc">Permanently delete your account and all associated data. This cannot be undone.</p>
+      <button class="btn danger" onclick="openConfirmModal('delete')">Delete My Account</button>
+    </div>
   </div>
 </div>
 
@@ -161,27 +221,118 @@ document.getElementById('avatarFileInput').addEventListener('change', function (
     .then(d => { if (d.ok) location.reload(); else alert(d.error || 'Upload failed'); });
 });
 
-function saveSecurityQuestion() {
-  const q = document.getElementById('sq-select').value;
-  const a = document.getElementById('sq-answer').value.trim();
-  if (!q || !a) { alert('Please select a question and enter an answer.'); return; }
-  fetch('/api/profile/security-question', {
+/* ── Password Gate ── */
+function authenticateSettings() {
+  const pw = document.getElementById('gate-password').value;
+  const errEl = document.getElementById('gate-error');
+  errEl.style.display = 'none';
+  if (!pw) { errEl.textContent = 'Please enter your password.'; errEl.style.display = 'block'; return; }
+  fetch('/api/profile/verify-password', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({question: q, answer: a})
+    body: JSON.stringify({password: pw})
   }).then(r => r.json()).then(d => {
-    if (d.ok) location.reload();
+    if (d.ok) {
+      document.getElementById('authGate').style.display = 'none';
+      document.getElementById('authSettings').style.display = 'block';
+    } else {
+      errEl.textContent = d.error || 'Incorrect password.';
+      errEl.style.display = 'block';
+    }
+  });
+}
+document.getElementById('gate-password').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') authenticateSettings();
+});
+
+/* ── Change Password ── */
+function changePassword() {
+  const cur = document.getElementById('cp-current').value;
+  const np = document.getElementById('cp-new').value;
+  const conf = document.getElementById('cp-confirm').value;
+  const errEl = document.getElementById('cp-error');
+  const succEl = document.getElementById('cp-success');
+  errEl.style.display = 'none';
+  succEl.style.display = 'none';
+  if (!cur || !np || !conf) { errEl.textContent = 'All fields are required.'; errEl.style.display = 'block'; return; }
+  if (np !== conf) { errEl.textContent = 'Passwords do not match.'; errEl.style.display = 'block'; return; }
+  if (np.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display = 'block'; return; }
+  fetch('/api/profile/change-password', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({current_password: cur, new_password: np, confirm_password: conf})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      succEl.textContent = 'Password updated successfully.';
+      succEl.style.display = 'block';
+      document.getElementById('cp-current').value = '';
+      document.getElementById('cp-new').value = '';
+      document.getElementById('cp-confirm').value = '';
+    } else {
+      errEl.textContent = d.error || 'Failed to update password.';
+      errEl.style.display = 'block';
+    }
   });
 }
 
-function confirmWipe() {
-  openConfirmModal('wipe');
+/* ── Security Questions ── */
+// Custom question toggle
+var sqSelect = document.getElementById('sq-new-question');
+if (sqSelect) {
+  sqSelect.addEventListener('change', function() {
+    document.getElementById('sq-custom-group').style.display = this.value === 'custom' ? '' : 'none';
+  });
 }
 
-function confirmDelete() {
-  openConfirmModal('delete');
+function addSecurityQuestion() {
+  var sel = document.getElementById('sq-new-question');
+  var question = sel.value === 'custom'
+    ? document.getElementById('sq-custom-question').value.trim()
+    : sel.value;
+  var answer = document.getElementById('sq-new-answer').value.trim();
+  var errEl = document.getElementById('sq-error');
+  errEl.style.display = 'none';
+  if (!question || !answer) { errEl.textContent = 'Please select a question and enter an answer.'; errEl.style.display = 'block'; return; }
+  fetch('/api/profile/security-questions/add', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({question: question, answer: answer})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) location.reload();
+    else { errEl.textContent = d.error || 'Failed to add question.'; errEl.style.display = 'block'; }
+  });
 }
 
+function editSecurityQuestion(index) {
+  var entry = document.querySelector('.sq-entry[data-index="'+index+'"]');
+  var question = entry.querySelector('.sq-entry-question').textContent;
+  var newQ = prompt('Security Question:', question);
+  if (!newQ) return;
+  var newA = prompt('New Answer:');
+  if (!newA) return;
+  fetch('/api/profile/security-questions/update', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({index: index, question: newQ.trim(), answer: newA.trim()})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) location.reload();
+    else alert(d.error || 'Failed to update question.');
+  });
+}
+
+function deleteSecurityQuestion(index) {
+  if (!confirm('Delete this security question?')) return;
+  fetch('/api/profile/security-questions/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({index: index})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) location.reload();
+    else alert(d.error || 'Failed to delete question.');
+  });
+}
+
+/* ── Confirm Modal (wipe/delete) ── */
 let _confirmAction = null;
 
 function openConfirmModal(action) {

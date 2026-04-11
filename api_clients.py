@@ -53,42 +53,98 @@ def jikan_get(path: str, params: dict | None = None) -> dict:
     return r.json()
 
 
+def _title_matches(item: dict, query: str) -> bool:
+    """Return True if the item is a relevant match for the query.
+
+    1. Full query as a substring of any title → match.
+    2. Single-word query → substring match (lenient).
+    3. Multi-word → ALL unique query words must appear in at least one title.
+    """
+    q_lower = query.lower()
+    q_words = list(dict.fromkeys(q_lower.split()))  # deduplicate, preserve order
+    if not q_words:
+        return True
+
+    titles = [
+        (item.get("title") or "").lower(),
+        (item.get("title_english") or "").lower(),
+        (item.get("title_japanese") or "").lower(),
+    ]
+    for syn in (item.get("title_synonyms") or []):
+        titles.append(syn.lower())
+
+    # Full query substring match (strongest signal)
+    if any(q_lower in t for t in titles):
+        return True
+
+    # Single word → substring match (lenient)
+    if len(q_words) == 1:
+        return False  # already checked above
+
+    # Multi-word → require ALL query words in at least one title
+    for t in titles:
+        if all(w in t for w in q_words):
+            return True
+    return False
+
+
+def _search_with_filter(endpoint: str, query: str, *, genres: str = "",
+                        min_score: str = "", status: str = "", type_: str = "",
+                        order_by: str = "members", sort: str = "desc") -> dict:
+    """Fetch up to 4 API pages and collect all title-matched results.
+
+    Because Jikan does loose word matching, a query like "My Dress-Up Darling"
+    may scatter relevant entries (Season 1, Season 2, …) across multiple pages
+    filled with unrelated titles.  This helper aggregates them.
+    """
+    all_matched: list[dict] = []
+    seen_ids: set[int] = set()
+    max_pages = 4
+
+    for pg in range(1, max_pages + 1):
+        params = {
+            "q": query, "limit": 25, "page": pg,
+            "order_by": order_by, "sort": sort,
+            "sfw": "true",
+        }
+        if genres:    params["genres"] = genres
+        if min_score: params["min_score"] = min_score
+        if status:    params["status"] = status
+        if type_:     params["type"] = type_
+
+        resp = jikan_get(endpoint, params)
+        page_data = resp.get("data", [])
+        pagination = resp.get("pagination", {})
+
+        for item in page_data:
+            mid = item.get("mal_id")
+            if mid in seen_ids:
+                continue
+            seen_ids.add(mid)
+            if not query or _title_matches(item, query):
+                all_matched.append(item)
+
+        # stop early if the API has no more pages
+        if not pagination.get("has_next_page"):
+            break
+
+    return {"data": all_matched, "pagination": {}}
+
+
 def search_anime(query: str, *, genres: str = "", min_score: str = "",
                  status: str = "", type_: str = "", order_by: str = "members",
-                 sort: str = "desc", limit: int = 24, page: int = 1) -> list[dict]:
-    """
-    Search anime by title (searches across title, title_english, title_japanese, and title_synonyms).
-    Results ordered by 'members' (popularity) by default for better relevance.
-    """
-    params = {
-        "q": query, "limit": limit, "page": page,
-        "order_by": order_by, "sort": sort,
-        "sfw": "true",
-    }
-    if genres:    params["genres"] = genres
-    if min_score: params["min_score"] = min_score
-    if status:    params["status"] = status
-    if type_:     params["type"] = type_
-    return jikan_get("/anime", params).get("data", [])
+                 sort: str = "desc", **_kw) -> dict:
+    return _search_with_filter("/anime", query, genres=genres,
+                               min_score=min_score, status=status,
+                               type_=type_, order_by=order_by, sort=sort)
 
 
 def search_manga(query: str, *, genres: str = "", min_score: str = "",
                  status: str = "", type_: str = "", order_by: str = "members",
-                 sort: str = "desc", limit: int = 24, page: int = 1) -> list[dict]:
-    """
-    Search manga by title (searches across title, title_english, title_japanese, and title_synonyms).
-    Results ordered by 'members' (popularity) by default for better relevance.
-    """
-    params = {
-        "q": query, "limit": limit, "page": page,
-        "order_by": order_by, "sort": sort,
-        "sfw": "true",
-    }
-    if genres:    params["genres"] = genres
-    if min_score: params["min_score"] = min_score
-    if status:    params["status"] = status
-    if type_:     params["type"] = type_
-    return jikan_get("/manga", params).get("data", [])
+                 sort: str = "desc", **_kw) -> dict:
+    return _search_with_filter("/manga", query, genres=genres,
+                               min_score=min_score, status=status,
+                               type_=type_, order_by=order_by, sort=sort)
 
 
 def get_anime(mal_id: int) -> dict:
@@ -99,6 +155,28 @@ def get_anime(mal_id: int) -> dict:
 def get_manga(mal_id: int) -> dict:
     key = f"manga:{mal_id}"
     return _cached_get(key, lambda: jikan_get(f"/manga/{mal_id}/full").get("data", {}))
+
+
+def get_entry_brief(mal_id: int, kind: str) -> dict:
+    """Fetch minimal info (cover image + English title) for a relation entry.
+
+    Uses the full-detail cache when available, otherwise fetches the base
+    endpoint (lighter than /full) and caches for the standard TTL.
+    """
+    key = f"{kind}:{mal_id}"
+    # check if we already have it cached from a full fetch
+    if key in _cache:
+        ts, val = _cache[key]
+        if time.time() - ts < _CACHE_TTL and val:
+            return val
+
+    def _fetch():
+        _throttle()
+        r = _session.get(f"{JIKAN_BASE}/{kind}/{mal_id}", timeout=15)
+        r.raise_for_status()
+        return r.json().get("data", {})
+
+    return _cached_get(f"brief:{key}", _fetch)
 
 
 def get_anime_episodes(mal_id: int, page: int = 1) -> list[dict]:

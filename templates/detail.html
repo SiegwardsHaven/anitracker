@@ -17,7 +17,7 @@
 
   <div class="profile-body">
     <aside class="side">
-      <img class="cover-art" src="{{ cover }}" alt="">
+      <img class="cover-art" src="{{ cover }}" alt="" onclick="openCoverViewer()" title="Click to view full image">
       <button class="btn primary block" onclick="openTracker()">+ Add to My List</button>
 
       <dl class="facts">
@@ -69,8 +69,10 @@
       <h3>Synopsis</h3>
       {% set clean_synopsis = (data.synopsis or 'No synopsis available.')|replace('[Written by MAL Rewrite]', '')|trim %}
       {% if clean_synopsis|length > 400 %}
-        <p class="synopsis" id="synopsis-text">{{ clean_synopsis[:400] }}...<button class="read-more-btn" onclick="toggleSynopsis()">Read more</button></p>
-        <p class="synopsis hidden" id="synopsis-full">{{ clean_synopsis }}<button class="read-more-btn" onclick="toggleSynopsis()">Read less</button></p>
+        <p class="synopsis" id="synopsis-text">{{ clean_synopsis[:400] }}...</p>
+        <button class="read-more-btn" onclick="toggleSynopsis()">Read more</button>
+        <p class="synopsis hidden" id="synopsis-full">{{ clean_synopsis }}</p>
+        <button class="read-more-btn hidden" id="read-less-btn" onclick="toggleSynopsis()">Read less</button>
       {% else %}
         <p class="synopsis">{{ clean_synopsis }}</p>
       {% endif %}
@@ -128,18 +130,21 @@
                 <h4 class="relation-type">{{ rel.relation }}</h4>
                 <div class="relation-cards-scroll">
                   {% for item in rel.entry %}
-                    {% set img_url = '' %}
-                    {% if item.images and item.images.jpg %}
-                      {% set img_url = item.images.jpg.large_image_url or item.images.jpg.image_url %}
-                    {% endif %}
                     <a href="/{{ item.type }}/{{ item.mal_id }}" class="relation-card">
+                      {% set img_url = '' %}
+                      {% if item.images and item.images.jpg %}
+                        {% set img_url = item.images.jpg.large_image_url or item.images.jpg.image_url or '' %}
+                      {% endif %}
                       {% if img_url %}
                         <div class="relation-cover" style="background-image: url('{{ img_url }}')"></div>
                       {% else %}
                         <div class="relation-cover no-image">?</div>
                       {% endif %}
                       <div class="relation-info">
-                        <div class="relation-title">{{ item.name }}</div>
+                        <div class="relation-title">{{ item.title_english or item.name }}</div>
+                        {% if item.title_english and item.title_english != item.name %}
+                          <div class="relation-subtitle">{{ item.name }}</div>
+                        {% endif %}
                         <div class="relation-meta">{{ item.type|capitalize }}</div>
                       </div>
                     </a>
@@ -256,7 +261,30 @@
   </div>
 </div>
 
+<!-- ═══════ Cover Viewer Modal ═══════ -->
+<div class="modal-overlay" id="coverViewer">
+  <div class="cover-viewer-backdrop" onclick="closeCoverViewer()"></div>
+  <div class="cover-viewer-wrap">
+    <button class="modal-close cover-viewer-close" onclick="closeCoverViewer()">✕</button>
+    <img class="cover-viewer-img" src="{{ extras.cover_xl or data.images.jpg.large_image_url }}" alt="{{ data.title }}">
+  </div>
+</div>
+
 <script>
+  /* Cover viewer */
+  function openCoverViewer() {
+    document.getElementById('coverViewer').classList.add('open');
+  }
+  function closeCoverViewer() {
+    document.getElementById('coverViewer').classList.remove('open');
+  }
+  document.getElementById('coverViewer').addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeCoverViewer();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.getElementById('coverViewer').classList.contains('open')) closeCoverViewer();
+  });
+
   window.TRACK = {
     kind:            "{{ kind }}",
     mal_id:          {{ data.mal_id }},

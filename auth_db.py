@@ -98,7 +98,7 @@ def get_security_question(username: str) -> str:
 
 
 def update_security_question(user_id: str, question: str, answer: str):
-    """Update or set a user's security question."""
+    """Update or set a user's security question (legacy single-question)."""
     security_questions_col.update_one(
         {"user_id": user_id},
         {"$set": {
@@ -108,6 +108,151 @@ def update_security_question(user_id: str, question: str, answer: str):
             "updated_at": datetime.utcnow(),
         }},
         upsert=True,
+    )
+
+
+def get_security_questions_list(user_id: str) -> list[dict]:
+    """Return all security questions for a user (max 3).
+    Each item: {index, question, updated_at}
+    """
+    doc = security_questions_col.find_one({"user_id": user_id})
+    if not doc:
+        return []
+    # Support both legacy single-question and new multi-question format
+    questions = doc.get("questions")
+    if questions:
+        return [{"index": i, "question": q["question"], "updated_at": q.get("updated_at")}
+                for i, q in enumerate(questions)]
+    # Legacy: single question field
+    if doc.get("question"):
+        return [{"index": 0, "question": doc["question"], "updated_at": doc.get("updated_at")}]
+    return []
+
+
+def set_security_questions(user_id: str, questions: list[dict]):
+    """Replace all security questions for a user.
+    questions: list of {question: str, answer: str} (max 3).
+    """
+    if len(questions) > 3:
+        raise ValueError("Maximum 3 security questions allowed")
+    entries = []
+    for q in questions:
+        entries.append({
+            "question": q["question"],
+            "answer": hash_password(q["answer"]),
+            "updated_at": datetime.utcnow(),
+        })
+    security_questions_col.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "user_id": user_id,
+            "questions": entries,
+            # Keep legacy field pointing to first question for password reset compat
+            "question": entries[0]["question"] if entries else "",
+            "answer": entries[0]["answer"] if entries else "",
+            "updated_at": datetime.utcnow(),
+        }},
+        upsert=True,
+    )
+
+
+def add_security_question(user_id: str, question: str, answer: str):
+    """Add a single security question (up to 3 max)."""
+    existing = get_security_questions_list(user_id)
+    if len(existing) >= 3:
+        raise ValueError("Maximum 3 security questions allowed")
+    doc = security_questions_col.find_one({"user_id": user_id})
+    questions = doc.get("questions", []) if doc else []
+    # Migrate legacy single-question if needed
+    if not questions and doc and doc.get("question"):
+        questions = [{"question": doc["question"], "answer": doc["answer"],
+                       "updated_at": doc.get("updated_at", datetime.utcnow())}]
+    questions.append({
+        "question": question,
+        "answer": hash_password(answer),
+        "updated_at": datetime.utcnow(),
+    })
+    security_questions_col.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "user_id": user_id,
+            "questions": questions,
+            "question": questions[0]["question"],
+            "answer": questions[0]["answer"],
+            "updated_at": datetime.utcnow(),
+        }},
+        upsert=True,
+    )
+
+
+def update_security_question_at(user_id: str, index: int, question: str, answer: str):
+    """Update a specific security question by index."""
+    doc = security_questions_col.find_one({"user_id": user_id})
+    if not doc:
+        raise ValueError("No security questions found")
+    questions = doc.get("questions", [])
+    if not questions and doc.get("question"):
+        questions = [{"question": doc["question"], "answer": doc["answer"],
+                       "updated_at": doc.get("updated_at", datetime.utcnow())}]
+    if index < 0 or index >= len(questions):
+        raise ValueError("Invalid question index")
+    questions[index] = {
+        "question": question,
+        "answer": hash_password(answer),
+        "updated_at": datetime.utcnow(),
+    }
+    security_questions_col.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "questions": questions,
+            "question": questions[0]["question"],
+            "answer": questions[0]["answer"],
+            "updated_at": datetime.utcnow(),
+        }},
+    )
+
+
+def delete_security_question_at(user_id: str, index: int):
+    """Delete a specific security question by index."""
+    doc = security_questions_col.find_one({"user_id": user_id})
+    if not doc:
+        raise ValueError("No security questions found")
+    questions = doc.get("questions", [])
+    if not questions and doc.get("question"):
+        questions = [{"question": doc["question"], "answer": doc["answer"],
+                       "updated_at": doc.get("updated_at", datetime.utcnow())}]
+    if index < 0 or index >= len(questions):
+        raise ValueError("Invalid question index")
+    questions.pop(index)
+    update = {
+        "questions": questions,
+        "updated_at": datetime.utcnow(),
+    }
+    if questions:
+        update["question"] = questions[0]["question"]
+        update["answer"] = questions[0]["answer"]
+    else:
+        update["question"] = ""
+        update["answer"] = ""
+    security_questions_col.update_one(
+        {"user_id": user_id},
+        {"$set": update},
+    )
+
+
+def verify_user_password(user_id: str, password: str) -> bool:
+    """Verify the current password for an authenticated user."""
+    user = get_user_by_id(user_id)
+    if not user:
+        return False
+    return verify_password(password, user["password"])
+
+
+def change_password(user_id: str, new_password: str):
+    """Change a user's password."""
+    users_collection.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"password": hash_password(new_password)}}
     )
 
 
@@ -125,9 +270,11 @@ def get_user_profile(user_id: str) -> dict:
     if not user:
         return None
     sq = security_questions_col.find_one({"user_id": user_id})
-    user["has_security_question"] = bool(sq)
-    user["security_question"] = sq["question"] if sq else None
+    user["has_security_question"] = bool(sq and (sq.get("questions") or sq.get("question")))
+    user["security_question"] = sq["question"] if sq and sq.get("question") else None
     user["security_answer_masked"] = "*****" if sq else None
+    user["security_questions_list"] = get_security_questions_list(user_id)
+    user["security_questions_count"] = len(user["security_questions_list"])
     return user
 
 

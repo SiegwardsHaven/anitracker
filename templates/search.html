@@ -33,7 +33,7 @@
 </div>
 {% endif %}
 
-<form class="search-bar" method="get" action="{{ url_for('search') }}">
+<form class="search-bar" method="get" action="{{ url_for('search') }}" id="searchForm">
   <input type="hidden" name="kind" value="{{ kind }}">
   <div class="kind-toggle">
     <a class="{{ 'on' if kind=='anime' else '' }}" href="{{ url_for('search', kind='anime') }}">Anime</a>
@@ -41,75 +41,96 @@
   </div>
   <input class="q" type="text" name="q" value="{{ q or '' }}" placeholder="Search title…">
   <button class="btn primary" type="submit">Search</button>
-  <button class="btn" type="button" onclick="document.getElementById('adv').classList.toggle('open')">Advanced ▾</button>
+  <button class="btn" type="button" id="advToggle">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+    Filters
+  </button>
 
-  <div id="adv" class="advanced">
-    <label>Genres
-      <select name="genres" multiple size="6">
-        {% for g in genres_list %}
-          <option value="{{ g.mal_id }}"
-            {% if (selected_genres or '') and (g.mal_id|string in selected_genres.split(',')) %}selected{% endif %}>
-            {{ g.name }}
-          </option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Min score
-      <select name="min_score">
-        <option value="">Any</option>
-        {% for s in [5,6,7,8,9] %}
-          <option value="{{ s }}" {% if min_score==s|string %}selected{% endif %}>{{ s }}+</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Status
-      <select name="status">
-        <option value="">Any</option>
-        {% if kind=='anime' %}
-          <option value="airing"   {% if status=='airing' %}selected{% endif %}>Airing</option>
-          <option value="complete" {% if status=='complete' %}selected{% endif %}>Complete</option>
-          <option value="upcoming" {% if status=='upcoming' %}selected{% endif %}>Upcoming</option>
-        {% else %}
-          <option value="publishing" {% if status=='publishing' %}selected{% endif %}>Publishing</option>
-          <option value="complete"   {% if status=='complete' %}selected{% endif %}>Complete</option>
-          <option value="hiatus"     {% if status=='hiatus' %}selected{% endif %}>Hiatus</option>
-        {% endif %}
-      </select>
-    </label>
-    <label>Type
-      <select name="type">
-        <option value="">Any</option>
-        {% if kind=='anime' %}
-          {% for t in ['tv','movie','ova','special','ona'] %}
-            <option value="{{ t }}" {% if type_==t %}selected{% endif %}>{{ t.upper() }}</option>
+  <div id="adv" class="advanced-panel">
+    <div class="adv-header">
+      <span class="adv-title">Advanced Filters</span>
+      <button type="button" class="adv-clear" id="advClear">Clear All</button>
+    </div>
+    <div class="adv-grid">
+      <div class="adv-field">
+        <label>Genres</label>
+        <select name="genres" multiple size="5" class="adv-select">
+          {% for g in genres_list %}
+            <option value="{{ g.mal_id }}"
+              {% if (selected_genres or '') and (g.mal_id|string in selected_genres.split(',')) %}selected{% endif %}>
+              {{ g.name }}
+            </option>
           {% endfor %}
-        {% else %}
-          {% for t in ['manga','novel','lightnovel','oneshot','manhwa','manhua'] %}
-            <option value="{{ t }}" {% if type_==t %}selected{% endif %}>{{ t }}</option>
+        </select>
+        <span class="adv-hint">Hold Ctrl/Cmd to select multiple</span>
+      </div>
+      <div class="adv-field">
+        <label>Min Score</label>
+        <select name="min_score" class="adv-select">
+          <option value="">Any</option>
+          {% for s in [5,6,7,8,9] %}
+            <option value="{{ s }}" {% if min_score==s|string %}selected{% endif %}>{{ s }}+</option>
           {% endfor %}
-        {% endif %}
-      </select>
-    </label>
-    <label>Order by
-      <select name="order_by">
-        {% for o in ['members','score','popularity','rank','title','start_date'] %}
-          <option value="{{ o }}" {% if order_by==o %}selected{% endif %}>{{ o.replace('_', ' ').title() }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Sort
-      <select name="sort">
-        <option value="desc" {% if sort=='desc' %}selected{% endif %}>desc</option>
-        <option value="asc"  {% if sort=='asc'  %}selected{% endif %}>asc</option>
-      </select>
-    </label>
+        </select>
+      </div>
+      <div class="adv-field">
+        <label>Status</label>
+        <select name="status" class="adv-select">
+          <option value="">Any</option>
+          {% if kind=='anime' %}
+            <option value="airing"   {% if status=='airing' %}selected{% endif %}>Airing</option>
+            <option value="complete" {% if status=='complete' %}selected{% endif %}>Complete</option>
+            <option value="upcoming" {% if status=='upcoming' %}selected{% endif %}>Upcoming</option>
+          {% else %}
+            <option value="publishing" {% if status=='publishing' %}selected{% endif %}>Publishing</option>
+            <option value="complete"   {% if status=='complete' %}selected{% endif %}>Complete</option>
+            <option value="hiatus"     {% if status=='hiatus' %}selected{% endif %}>Hiatus</option>
+          {% endif %}
+        </select>
+      </div>
+      <div class="adv-field">
+        <label>Type</label>
+        <select name="type" class="adv-select">
+          <option value="">Any</option>
+          {% if kind=='anime' %}
+            {% for t in ['tv','movie','ova','special','ona'] %}
+              <option value="{{ t }}" {% if type_==t %}selected{% endif %}>{{ t.upper() }}</option>
+            {% endfor %}
+          {% else %}
+            {% for t in ['manga','novel','lightnovel','oneshot','manhwa','manhua'] %}
+              <option value="{{ t }}" {% if type_==t %}selected{% endif %}>{{ t|capitalize }}</option>
+            {% endfor %}
+          {% endif %}
+        </select>
+      </div>
+      <div class="adv-field">
+        <label>Order By</label>
+        <select name="order_by" class="adv-select">
+          {% for o in ['members','score','popularity','rank','title','start_date'] %}
+            <option value="{{ o }}" {% if order_by==o %}selected{% endif %}>{{ o.replace('_', ' ').title() }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="adv-field">
+        <label>Sort</label>
+        <select name="sort" class="adv-select">
+          <option value="desc" {% if sort=='desc' %}selected{% endif %}>Descending</option>
+          <option value="asc"  {% if sort=='asc'  %}selected{% endif %}>Ascending</option>
+        </select>
+      </div>
+    </div>
+    <div class="adv-actions">
+      <button type="submit" class="btn primary">Apply Filters</button>
+    </div>
   </div>
 </form>
 
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
 {% if results %}
-  <p class="search-info">Found {{ results|length }} results {% if q %}for "{{ q }}"{% endif %}</p>
+  <p class="search-info">
+    {{ results|length }} result{{ 's' if results|length != 1 else '' }} {% if q %}for "{{ q }}"{% endif %}
+  </p>
 {% elif q %}
   <p class="no-data">No results found for "{{ q }}". Try searching with the Japanese or English title.</p>
 {% endif %}
@@ -133,4 +154,19 @@
     </a>
   {% endfor %}
 </div>
+
+<script>
+(function(){
+  var toggle = document.getElementById('advToggle');
+  var panel = document.getElementById('adv');
+  toggle.addEventListener('click', function(){ panel.classList.toggle('open'); });
+
+  document.getElementById('advClear').addEventListener('click', function(){
+    panel.querySelectorAll('select').forEach(function(sel){
+      if(sel.multiple){ for(var i=0;i<sel.options.length;i++) sel.options[i].selected=false; }
+      else { sel.selectedIndex=0; }
+    });
+  });
+})();
+</script>
 {% endblock %}
