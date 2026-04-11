@@ -59,7 +59,7 @@
         <div class="chart-legend" id="genreLegend">
           {% for i in range(genre_labels|length) %}
           <div class="legend-item" data-index="{{ i }}">
-            <span class="legend-dot" style="background: {{ genre_colors[i] }}"></span>
+            <span class="legend-dot" data-color="{{ genre_colors[i] }}"></span>
             <span class="legend-name">{{ genre_labels[i] }}</span>
             <span class="legend-pct">{{ ((genre_values[i] / genre_total) * 100)|round(1) }}%</span>
           </div>
@@ -84,7 +84,7 @@
         <div class="vbar-col" data-score="{{ i }}" data-count="{{ cnt }}">
           <span class="vbar-val">{{ cnt }}</span>
           <div class="vbar-track">
-            <div class="vbar-fill" style="height: {{ (cnt / max_sc * 100)|round }}%;"></div>
+            <div class="vbar-fill" data-height="{{ (cnt / max_sc * 100)|round }}"></div>
           </div>
           <span class="vbar-label">{{ i }}</span>
         </div>
@@ -158,8 +158,31 @@
   {% endif %}
 </div>
 
+<script id="statsData" type="application/json">
+{
+  "genre_labels": {{ genre_labels|tojson }},
+  "genre_values": {{ genre_values|tojson }},
+  "genre_colors": {{ genre_colors|tojson }},
+  "genre_total":  {{ genre_total }},
+  "month_labels": {{ month_labels|tojson }},
+  "anime_activity": {{ anime_activity|tojson }},
+  "manga_activity": {{ manga_activity|tojson }},
+  "taste_labels": {{ taste_labels|tojson }},
+  "taste_values": {{ taste_values|tojson }}
+}
+</script>
+
 <script>
 (function(){
+  var _d = JSON.parse(document.getElementById('statsData').textContent);
+
+  /* ──────────── Apply data attributes → CSS ──────────── */
+  document.querySelectorAll('.legend-dot[data-color]').forEach(function(el) {
+    el.style.background = el.dataset.color;
+  });
+  document.querySelectorAll('.vbar-fill[data-height]').forEach(function(el) {
+    el.style.height = el.dataset.height + '%';
+  });
   /* ──────────── Shared Tooltip ──────────── */
   var tip = document.getElementById('chartTooltip');
   function showTip(ev, html) {
@@ -179,9 +202,9 @@
   var donutEl = document.getElementById('genreDonut');
   if (donutEl) {
     var dc = donutEl.getContext('2d');
-    var gLabels = {{ genre_labels|tojson }};
-    var gValues = {{ genre_values|tojson }};
-    var gColors = {{ genre_colors|tojson }};
+    var gLabels = _d.genre_labels;
+    var gValues = _d.genre_values;
+    var gColors = _d.genre_colors;
     var gTotal  = gValues.reduce(function(a,b){ return a+b; }, 0) || 1;
     var hovSlice = -1, animP = 0;
     var dW, dH, dCx, dCy, outerR, innerR;
@@ -302,9 +325,9 @@
     var ctx = canvas.getContext('2d');
     var W = canvas.width = canvas.parentElement.clientWidth - 48;
     var H = canvas.height = 200;
-    var mLabels = {{ month_labels|tojson }};
-    var ep = {{ anime_activity|tojson }};
-    var ch = {{ manga_activity|tojson }};
+    var mLabels = _d.month_labels;
+    var ep = _d.anime_activity;
+    var ch = _d.manga_activity;
     var maxVal = Math.max(1, Math.max.apply(null, ep.concat(ch)));
     var padL = 36, padR = 10, padT = 16, padB = 28;
     var plotW = W - padL - padR;
@@ -397,8 +420,8 @@
   var radar = document.getElementById('radarChart');
   if (radar) {
     var rc = radar.getContext('2d');
-    var rLabels = {{ taste_labels|tojson }};
-    var rValues = {{ taste_values|tojson }};
+    var rLabels = _d.taste_labels;
+    var rValues = _d.taste_values;
     if (rLabels.length >= 3) {
       var rW = radar.width = radar.parentElement.clientWidth - 48;
       var rH = radar.height = 240;
