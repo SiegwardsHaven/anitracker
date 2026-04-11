@@ -136,11 +136,15 @@ def _search_with_filter(endpoint: str, query: str, *, genres: str = "",
         return {"data": resp.get("data", []), "pagination": resp.get("pagination", {})}
 
     # ── Text query: multi-page aggregation for title matching ──
+    # Drop order_by for text queries so Jikan uses its default relevancy
+    # ranking — otherwise order_by=members pushes less-popular seasons/sequels
+    # beyond the scan window.
+    text_params = {k: v for k, v in params_base.items() if k not in ("order_by", "sort")}
     all_matched: list[dict] = []
     seen_ids: set[int] = set()
 
     for pg in range(1, max_pages + 1):
-        params = {**params_base, "q": query, "page": pg}
+        params = {**text_params, "q": query, "page": pg}
 
         resp = jikan_get(endpoint, params)
         page_data = resp.get("data", [])
@@ -164,7 +168,7 @@ def _search_with_filter(endpoint: str, query: str, *, genres: str = "",
 def search_anime(query: str, *, genres: str = "", min_score: str = "",
                  status: str = "", type_: str = "", order_by: str = "members",
                  sort: str = "desc", page: int = 1, **_kw) -> dict:
-    pages = 3 if query else 1
+    pages = 4 if query else 1
     return _search_with_filter("/anime", query, genres=genres,
                                min_score=min_score, status=status,
                                type_=type_, order_by=order_by, sort=sort,
@@ -174,7 +178,7 @@ def search_anime(query: str, *, genres: str = "", min_score: str = "",
 def search_manga(query: str, *, genres: str = "", min_score: str = "",
                  status: str = "", type_: str = "", order_by: str = "members",
                  sort: str = "desc", page: int = 1, **_kw) -> dict:
-    pages = 3 if query else 1
+    pages = 4 if query else 1
     return _search_with_filter("/manga", query, genres=genres,
                                min_score=min_score, status=status,
                                type_=type_, order_by=order_by, sort=sort,
