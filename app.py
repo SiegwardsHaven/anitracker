@@ -198,7 +198,8 @@ def logout():
 @app.route("/")
 @login_required
 def home():
-    return render_template("home.html")
+    slides = api.get_top_rated_carousel("anime", limit=6)
+    return render_template("home.html", slides=slides)
 
 
 # ------------------------------------------------------------------

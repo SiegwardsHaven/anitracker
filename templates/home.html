@@ -1,5 +1,39 @@
 {% extends "base.html" %}
 {% block content %}
+
+<!-- ═══════ Animated Hero Slideshow ═══════ -->
+{% if slides %}
+<div class="hero-slider" id="heroSlider">
+  <div class="hero-slides">
+    {% for s in slides %}
+    <div class="hero-slide {{ 'active' if loop.first }}" style="background-image: linear-gradient(180deg, rgba(10,10,14,.3) 0%, rgba(10,10,14,.92) 85%), url('{{ s.images.jpg.large_image_url }}');">
+      <div class="hero-slide-content">
+        <span class="hero-slide-badge">Trending #{{ loop.index }}</span>
+        <h2 class="hero-slide-title">{{ s.title_english or s.title }}</h2>
+        <div class="hero-slide-meta">
+          {% if s.score %}<span>★ {{ s.score }}</span>{% endif %}
+          {% if s.episodes %}<span>{{ s.episodes }} eps</span>{% endif %}
+          {% if s.type %}<span>{{ s.type }}</span>{% endif %}
+        </div>
+        <a class="btn primary hero-slide-btn" href="{{ url_for('anime_detail', mal_id=s.mal_id) }}">View Details</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="hero-slider-dots" id="sliderDots">
+    {% for s in slides %}
+    <button class="slider-dot {{ 'active' if loop.first }}" onclick="goToSlide({{ loop.index0 }})" aria-label="Slide {{ loop.index }}"></button>
+    {% endfor %}
+  </div>
+  <button class="hero-slider-arrow left" onclick="slideHero(-1)" aria-label="Previous">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
+  <button class="hero-slider-arrow right" onclick="slideHero(1)" aria-label="Next">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+</div>
+{% endif %}
+
 <section class="hero">
   <h1>Track every anime &amp; manga you love.</h1>
   <p>Powered by Jikan (MyAnimeList) and AniList. Build your library, rate, and progress.</p>
@@ -8,4 +42,42 @@
     <a class="btn"        href="{{ url_for('search', kind='manga') }}">Browse Manga</a>
   </div>
 </section>
+
+<script>
+(function(){
+  var slides = document.querySelectorAll('.hero-slide');
+  var dots = document.querySelectorAll('.slider-dot');
+  if (!slides.length) return;
+  var current = 0;
+  var total = slides.length;
+  var interval;
+
+  function show(idx) {
+    slides[current].classList.remove('active');
+    dots[current].classList.remove('active');
+    current = ((idx % total) + total) % total;
+    slides[current].classList.add('active');
+    dots[current].classList.add('active');
+  }
+
+  function startAuto() {
+    interval = setInterval(function(){ show(current + 1); }, 5000);
+  }
+  function resetAuto() {
+    clearInterval(interval);
+    startAuto();
+  }
+
+  window.slideHero = function(dir) {
+    show(current + dir);
+    resetAuto();
+  };
+  window.goToSlide = function(idx) {
+    show(idx);
+    resetAuto();
+  };
+
+  startAuto();
+})();
+</script>
 {% endblock %}

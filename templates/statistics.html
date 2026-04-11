@@ -128,7 +128,7 @@
 
     <!-- Library Composition + Activity Timeline -->
     <div class="dash-row">
-      <!-- Library composition donut -->
+      <!-- Library composition donut (interactive) -->
       <div class="dash-card">
         <div class="dash-card-head">
           <h3>Library Composition</h3>
@@ -136,28 +136,49 @@
         </div>
         <div class="pie-area">
           {% set comp_total = total_titles or 1 %}
-          {% set anime_pct = (anime_stats.total / comp_total * 360) %}
-          {% set manga_pct = (manga_stats.total / comp_total * 360) %}
-          <div class="donut-chart" style="background: conic-gradient(
-            var(--accent) 0deg {{ anime_pct }}deg,
-            var(--accent-2) {{ anime_pct }}deg {{ anime_pct + manga_pct }}deg
-          );">
-            <div class="donut-hole">
-              <span class="donut-number">{{ total_titles }}</span>
-              <span class="donut-label">Total</span>
+          {% set anime_pct_val = ((anime_stats.total / comp_total) * 100)|round(1) %}
+          {% set manga_pct_val = ((manga_stats.total / comp_total) * 100)|round(1) %}
+          <div class="interactive-donut" id="libDonut">
+            <svg viewBox="0 0 200 200" class="donut-svg">
+              {% set anime_frac = anime_stats.total / comp_total %}
+              {% set manga_frac = manga_stats.total / comp_total %}
+              {% set circumference = 502.65 %}
+              <!-- Anime arc -->
+              <circle class="donut-segment" id="seg-anime"
+                cx="100" cy="100" r="80"
+                stroke="var(--accent)" stroke-width="28" fill="none"
+                stroke-dasharray="{{ (anime_frac * circumference)|round(2) }} {{ circumference }}"
+                stroke-dashoffset="0"
+                transform="rotate(-90 100 100)"
+                data-label="Anime" data-count="{{ anime_stats.total }}" data-pct="{{ anime_pct_val }}"
+              />
+              <!-- Manga arc -->
+              <circle class="donut-segment" id="seg-manga"
+                cx="100" cy="100" r="80"
+                stroke="var(--accent-2)" stroke-width="28" fill="none"
+                stroke-dasharray="{{ (manga_frac * circumference)|round(2) }} {{ circumference }}"
+                stroke-dashoffset="-{{ (anime_frac * circumference)|round(2) }}"
+                transform="rotate(-90 100 100)"
+                data-label="Manga" data-count="{{ manga_stats.total }}" data-pct="{{ manga_pct_val }}"
+              />
+            </svg>
+            <div class="donut-center" id="donutCenter">
+              <span class="donut-number" id="donutNumber">{{ total_titles }}</span>
+              <span class="donut-label" id="donutLabel">Total</span>
             </div>
+            <div class="donut-tooltip" id="donutTooltip"></div>
           </div>
           <div class="chart-legend">
-            <div class="legend-item">
+            <div class="legend-item legend-interactive" data-segment="seg-anime">
               <span class="legend-dot" style="background: var(--accent)"></span>
               <span class="legend-name">Anime</span>
-              <span class="legend-pct">{{ ((anime_stats.total / comp_total) * 100)|round(1) }}%</span>
+              <span class="legend-pct">{{ anime_pct_val }}%</span>
               <span class="legend-count">{{ anime_stats.total }}</span>
             </div>
-            <div class="legend-item">
+            <div class="legend-item legend-interactive" data-segment="seg-manga">
               <span class="legend-dot" style="background: var(--accent-2)"></span>
               <span class="legend-name">Manga</span>
-              <span class="legend-pct">{{ ((manga_stats.total / comp_total) * 100)|round(1) }}%</span>
+              <span class="legend-pct">{{ manga_pct_val }}%</span>
               <span class="legend-count">{{ manga_stats.total }}</span>
             </div>
           </div>
@@ -553,6 +574,7 @@
 
 <script>
 (function(){
+  /* Tab switching */
   const tabs = document.querySelectorAll('.dash-tab');
   tabs.forEach(t => t.addEventListener('click', () => {
     tabs.forEach(b => b.classList.remove('active'));
@@ -560,6 +582,60 @@
     document.querySelectorAll('.dash-panel').forEach(p => p.classList.add('hidden'));
     document.getElementById('tab-' + t.dataset.tab).classList.remove('hidden');
   }));
+
+  /* Interactive Library Composition Donut */
+  var segments = document.querySelectorAll('.donut-segment');
+  var centerNum = document.getElementById('donutNumber');
+  var centerLabel = document.getElementById('donutLabel');
+  var tooltip = document.getElementById('donutTooltip');
+  var defaultNum = centerNum ? centerNum.textContent : '';
+  var defaultLabel = centerLabel ? centerLabel.textContent : '';
+
+  segments.forEach(function(seg) {
+    seg.addEventListener('mouseenter', function() {
+      var label = seg.dataset.label;
+      var count = seg.dataset.count;
+      var pct = seg.dataset.pct;
+      if (centerNum) centerNum.textContent = count;
+      if (centerLabel) centerLabel.textContent = label;
+      seg.style.strokeWidth = '34';
+      seg.style.filter = 'brightness(1.3) drop-shadow(0 0 8px rgba(255,255,255,.2))';
+    });
+    seg.addEventListener('mouseleave', function() {
+      if (centerNum) centerNum.textContent = defaultNum;
+      if (centerLabel) centerLabel.textContent = defaultLabel;
+      seg.style.strokeWidth = '28';
+      seg.style.filter = '';
+    });
+    seg.addEventListener('mousemove', function(e) {
+      if (tooltip) {
+        tooltip.textContent = seg.dataset.label + ': ' + seg.dataset.count + ' (' + seg.dataset.pct + '%)';
+        tooltip.style.display = 'block';
+        var rect = seg.closest('.interactive-donut').getBoundingClientRect();
+        tooltip.style.left = (e.clientX - rect.left + 10) + 'px';
+        tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
+      }
+    });
+    seg.addEventListener('mouseout', function() {
+      if (tooltip) tooltip.style.display = 'none';
+    });
+  });
+
+  /* Legend hover syncs with donut */
+  document.querySelectorAll('.legend-interactive').forEach(function(item) {
+    var segId = item.dataset.segment;
+    var seg = document.getElementById(segId);
+    if (!seg) return;
+    item.addEventListener('mouseenter', function() {
+      seg.dispatchEvent(new Event('mouseenter'));
+      item.style.background = 'var(--panel-2)';
+    });
+    item.addEventListener('mouseleave', function() {
+      seg.dispatchEvent(new Event('mouseleave'));
+      item.style.background = '';
+      if (tooltip) tooltip.style.display = 'none';
+    });
+  });
 })();
 </script>
 

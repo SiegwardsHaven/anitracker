@@ -135,10 +135,10 @@
   <p class="no-data">No results found for "{{ q }}". Try searching with the Japanese or English title.</p>
 {% endif %}
 
-<div class="grid">
+<div class="grid" id="searchResults">
   {% for it in results %}
     {% set link = url_for('anime_detail', mal_id=it.mal_id) if kind=='anime' else url_for('manga_detail', mal_id=it.mal_id) %}
-    <a class="card" href="{{ link }}">
+    <a class="card search-result-card" href="{{ link }}">
       <div class="cover" style="background-image:url('{{ it.images.jpg.large_image_url }}')"></div>
       <div class="meta">
         <div class="t">{{ it.title_english or it.title }}</div>
@@ -155,6 +155,10 @@
   {% endfor %}
 </div>
 
+{% if results and results|length > 50 %}
+<nav class="pagination" id="searchPagination"></nav>
+{% endif %}
+
 <script>
 (function(){
   var toggle = document.getElementById('advToggle');
@@ -167,6 +171,55 @@
       else { sel.selectedIndex=0; }
     });
   });
+
+  /* ── Client-side pagination (50 per page) ── */
+  var PER_PAGE = 50;
+  var cards = document.querySelectorAll('.search-result-card');
+  var totalCards = cards.length;
+  var totalPages = Math.ceil(totalCards / PER_PAGE);
+  var currentPage = 1;
+  var paginationEl = document.getElementById('searchPagination');
+
+  function showPage(page) {
+    currentPage = page;
+    var start = (page - 1) * PER_PAGE;
+    var end = start + PER_PAGE;
+    cards.forEach(function(card, i) {
+      card.style.display = (i >= start && i < end) ? '' : 'none';
+    });
+    renderPagination();
+    window.scrollTo({ top: document.getElementById('searchResults').offsetTop - 80, behavior: 'smooth' });
+  }
+
+  function renderPagination() {
+    if (!paginationEl || totalPages <= 1) return;
+    var html = '';
+    html += '<button class="page-btn' + (currentPage === 1 ? ' disabled' : '') + '" onclick="window._searchPage(' + (currentPage - 1) + ')" ' + (currentPage === 1 ? 'disabled' : '') + '>&laquo;</button>';
+    var startP = Math.max(1, currentPage - 2);
+    var endP = Math.min(totalPages, currentPage + 2);
+    if (startP > 1) {
+      html += '<button class="page-btn" onclick="window._searchPage(1)">1</button>';
+      if (startP > 2) html += '<span class="page-dots">…</span>';
+    }
+    for (var p = startP; p <= endP; p++) {
+      html += '<button class="page-btn' + (p === currentPage ? ' active' : '') + '" onclick="window._searchPage(' + p + ')">' + p + '</button>';
+    }
+    if (endP < totalPages) {
+      if (endP < totalPages - 1) html += '<span class="page-dots">…</span>';
+      html += '<button class="page-btn" onclick="window._searchPage(' + totalPages + ')">' + totalPages + '</button>';
+    }
+    html += '<button class="page-btn' + (currentPage === totalPages ? ' disabled' : '') + '" onclick="window._searchPage(' + (currentPage + 1) + ')" ' + (currentPage === totalPages ? 'disabled' : '') + '>&raquo;</button>';
+    paginationEl.innerHTML = html;
+  }
+
+  window._searchPage = function(p) {
+    if (p < 1 || p > totalPages) return;
+    showPage(p);
+  };
+
+  if (totalCards > PER_PAGE) {
+    showPage(1);
+  }
 })();
 </script>
 {% endblock %}
